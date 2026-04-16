@@ -1,0 +1,27 @@
+[
+  {
+    "content": "Install @supabase/supabase-js, uninstall base44 packages, create .env",
+    "id": "1",
+    "status": "completed"
+  },
+  {
+    "content": "Create supabaseClient.js + entities.js, rewrite AuthContext + app, add Login page, update vite.config",
+    "id": "2",
+    "status": "completed"
+  },
+  {
+    "content": "Update all pages: Dashboard, SongLibrary, Presentation, PresentationBuilder, ScriptureBrowser, MediaLibrary, LiveMode, Settings, Songs, Scripture, Media, PresentationEditor, LivePresentation",
+    "id": "3",
+    "status": "completed"
+  },
+  {
+    "content": "Update components: SongEditor, SlideEditor, SongPicker, PageNotFound",
+    "id": "4",
+    "status": "completed"
+  },
+  {
+    "content": "Build and verify",
+    "id": "5",
+    "status": "completed"
+  }
+]

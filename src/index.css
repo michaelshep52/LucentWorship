@@ -1,0 +1,83 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Playfair+Display:wght@400;600&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 222 25% 8%;
+    --foreground: 210 20% 92%;
+    --card: 222 22% 11%;
+    --card-foreground: 210 20% 92%;
+    --popover: 222 22% 11%;
+    --popover-foreground: 210 20% 92%;
+    --primary: 217 91% 60%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 222 20% 16%;
+    --secondary-foreground: 210 20% 80%;
+    --muted: 222 20% 14%;
+    --muted-foreground: 210 15% 50%;
+    --accent: 217 60% 25%;
+    --accent-foreground: 217 80% 90%;
+    --destructive: 0 70% 50%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 222 18% 18%;
+    --input: 222 18% 18%;
+    --ring: 217 91% 60%;
+    --radius: 0.6rem;
+    --sidebar-background: 222 28% 6%;
+    --sidebar-foreground: 210 15% 70%;
+    --sidebar-primary: 217 91% 60%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 222 20% 12%;
+    --sidebar-accent-foreground: 210 20% 85%;
+    --sidebar-border: 222 18% 14%;
+    --sidebar-ring: 217 91% 60%;
+    --gold: 42 80% 58%;
+    --teal: 175 60% 45%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground font-inter;
+  }
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: hsl(var(--background));
+}
+::-webkit-scrollbar-thumb {
+  background: hsl(var(--border));
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--muted-foreground));
+}
+
+/* Slide transitions */
+.slide-enter {
+  opacity: 0;
+  transform: translateY(8px);
+}
+.slide-enter-active {
+  opacity: 1;
+  transform: translateY(0);
+  transition: opacity 400ms ease, transform 400ms ease;
+}
+.slide-exit {
+  opacity: 1;
+}
+.slide-exit-active {
+  opacity: 0;
+  transition: opacity 300ms ease;
+}
