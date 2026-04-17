@@ -189,7 +189,7 @@ export default function PresentationBuilder() {
           {/* Preview */}
           <div className="flex-1 flex items-center justify-center bg-black/50 p-4">
             {currentSlide ? (
-              <div className="w-full max-w-3xl aspect-video">
+              <div className="w-full max-w-3xl">
                 <SlidePreview slide={currentSlide} />
               </div>
             ) : (

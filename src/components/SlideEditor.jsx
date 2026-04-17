@@ -121,10 +121,26 @@ export default function SlideEditor({ slide, onChange, onSave, onImportScripture
 
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <label className="text-xs text-muted-foreground block mb-1">Main Content</label>
-          <textarea value={form.content || ""} onChange={(event) => update("content", event.target.value)}
-            rows={3} placeholder="Slide text..."
-            className="w-full px-2 py-1.5 bg-background border border-border rounded text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary resize-none" />
+          <div className="flex items-center justify-between mb-1">
+            <label className="text-xs text-muted-foreground">Main Content</label>
+            <span className={`text-xs font-mono ${(form.content || "").length > 180 ? "text-destructive font-bold" : (form.content || "").length > 150 ? "text-yellow-400" : "text-muted-foreground"}`}>
+              {(form.content || "").length}/180
+            </span>
+          </div>
+          <textarea
+            value={form.content || ""}
+            onChange={(event) => {
+              const val = event.target.value;
+              if (val.length <= 180) update("content", val);
+            }}
+            rows={3}
+            placeholder="Slide text (max 180 characters)..."
+            className={`w-full px-2 py-1.5 bg-background border rounded text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 resize-none transition-colors ${
+              (form.content || "").length > 150
+                ? "border-yellow-500/60 focus:ring-yellow-500/50"
+                : "border-border focus:ring-primary"
+            }`}
+          />
         </div>
         <div>
           <label className="text-xs text-muted-foreground block mb-1">Subtext / Attribution</label>

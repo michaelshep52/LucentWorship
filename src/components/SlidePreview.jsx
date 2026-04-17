@@ -1,27 +1,30 @@
 import { PRESENTATION_FONT_PX } from "@/lib/presentation-slides";
 
 export default function SlidePreview({ slide, small = false }) {
-    if (!slide) return null;
-  
-    const bgStyle = slide.background_image
-      ? { backgroundImage: `url(${slide.background_image})`, backgroundSize: "cover", backgroundPosition: "center" }
-      : { backgroundColor: slide.background_color || "#000000" };
-  
-    const fontSizes = {
-      small: small ? "text-xs" : "text-xl",
-      medium: small ? "text-xs" : "text-3xl",
-      large: small ? "text-sm" : "text-5xl",
-      xlarge: small ? "text-sm" : "text-7xl",
-    };
-  
+  if (!slide) return null;
+
+  const bgStyle = slide.background_image
+    ? { backgroundImage: `url(${slide.background_image})`, backgroundSize: "cover", backgroundPosition: "center" }
+    : { backgroundColor: slide.background_color || "#000000" };
+
+  const fontSizes = {
+    small: small ? "text-[6px]" : "text-xl",
+    medium: small ? "text-[7px]" : "text-3xl",
+    large: small ? "text-[8px]" : "text-5xl",
+    xlarge: small ? "text-[10px]" : "text-7xl",
+  };
+
   const alignClass = {
     left: "text-left items-start",
     center: "text-center items-center",
     right: "text-right items-end",
   }[slide.text_align || "center"] || "text-center items-center";
+
   const contentFontStyle = !small ? { fontSize: `${slide.font_px || PRESENTATION_FONT_PX}px` } : undefined;
-  
-    return (
+
+  return (
+    // Outer wrapper enforces 16:9 aspect ratio
+    <div className="w-full" style={{ aspectRatio: "16 / 9" }}>
       <div
         className="w-full h-full rounded-lg overflow-hidden flex flex-col justify-center relative"
         style={bgStyle}
@@ -30,21 +33,24 @@ export default function SlidePreview({ slide, small = false }) {
         {(slide.content || slide.type === "blank") && (
           <div className="absolute inset-0 bg-black/30 pointer-events-none" />
         )}
-        <div className={`relative z-10 flex flex-col px-${small ? "2" : "8"} py-4 w-full ${alignClass}`}>
+        <div className={`relative z-10 flex flex-col ${small ? "px-2" : "px-8"} py-4 w-full ${alignClass}`}>
           {slide.type === "blank" ? null : (
             <>
               {slide.content && (
-                <p className={`text-white font-semibold leading-snug whitespace-pre-wrap ${fontSizes[slide.font_size || "large"]}`} style={contentFontStyle}>
+                <p
+                  className={`text-white font-semibold leading-snug whitespace-pre-wrap ${fontSizes[slide.font_size || "large"]}`}
+                  style={contentFontStyle}
+                >
                   {slide.content}
                 </p>
               )}
               {slide.subtext && (
-                <p className={`text-white/70 mt-1 ${small ? "text-xs" : "text-lg"}`}>
+                <p className={`text-white/70 mt-1 ${small ? "text-[6px]" : "text-lg"}`}>
                   {slide.subtext}
                 </p>
               )}
               {!slide.content && !slide.subtext && (
-                <p className={`text-white/20 ${small ? "text-xs" : "text-xl"}`}>
+                <p className={`text-white/20 ${small ? "text-[7px]" : "text-xl"}`}>
                   {slide.type || "Empty slide"}
                 </p>
               )}
@@ -52,5 +58,6 @@ export default function SlidePreview({ slide, small = false }) {
           )}
         </div>
       </div>
-    );
-  }
+    </div>
+  );
+}
