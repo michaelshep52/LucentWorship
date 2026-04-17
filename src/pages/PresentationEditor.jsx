@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { MAX_LYRICS_CHARS_PER_PAGE, PRESENTATION_FONT_PX, paginateLyrics } from "@/lib/presentation-slides";
 import SlideEditor from "../components/presentation/SlideEditor";
 import SlidePreview from "../components/presentation/SlidePreview";
 import SongPicker from "../components/presentation/SongPicker";
@@ -48,6 +49,7 @@ export default function PresentationEditor() {
       subtext: "",
       background_color: "#0f172a",
       font_size: "large",
+      font_px: PRESENTATION_FONT_PX,
       text_align: "center",
     };
     setSlides([...slides, newSlide]);
@@ -55,19 +57,62 @@ export default function PresentationEditor() {
   }
 
   function addSongSlides(song) {
-    const newSlides = (song.sections || []).map((section, i) => ({
-      id: `${Date.now()}-${i}`,
-      type: "lyrics",
-      content: section.lyrics,
-      subtext: `${song.title} — ${section.label}`,
-      background_color: "#0f172a",
-      font_size: "large",
-      text_align: "center",
-      song_id: song.id,
-      section_index: i,
-    }));
+    const newSlides = (song.sections || []).flatMap((section, i) => {
+      const pages = paginateLyrics(section.lyrics, MAX_LYRICS_CHARS_PER_PAGE);
+
+      return pages.map((pageContent, pageIndex) => ({
+        id: `${Date.now()}-${i}-${pageIndex}`,
+        type: "lyrics",
+        content: pageContent,
+        subtext: pages.length > 1
+          ? `${song.title} — ${section.label} (${pageIndex + 1}/${pages.length})`
+          : `${song.title} — ${section.label}`,
+        background_color: "#0f172a",
+        font_size: "large",
+        font_px: PRESENTATION_FONT_PX,
+        text_align: "center",
+        song_id: song.id,
+        section_index: i,
+        page_index: pageIndex,
+      }));
+    });
     setSlides([...slides, ...newSlides]);
     setShowSongPicker(false);
+  }
+
+  function importScriptureSlides(passage) {
+    const pages = paginateLyrics(passage.text, MAX_LYRICS_CHARS_PER_PAGE);
+    const newSlides = pages.map((pageContent, pageIndex) => ({
+      id: `${Date.now()}-scripture-${pageIndex}`,
+      type: "scripture",
+      content: pageContent,
+      subtext: pages.length > 1
+        ? `${passage.reference} (${passage.translation}) (${pageIndex + 1}/${pages.length})`
+        : `${passage.reference} (${passage.translation})`,
+      background_color: activeSlide?.background_color || "#0f172a",
+      background_image: activeSlide?.background_image || "",
+      font_size: "large",
+      font_px: PRESENTATION_FONT_PX,
+      text_align: activeSlide?.text_align || "center",
+    }));
+
+    const shouldReplaceCurrent =
+      activeSlide?.type === "scripture" &&
+      !activeSlide?.content &&
+      !activeSlide?.subtext;
+
+    const nextSlides = [...slides];
+
+    if (shouldReplaceCurrent) {
+      nextSlides.splice(activeSlideIdx, 1, ...newSlides);
+      setSlides(nextSlides);
+      setActiveSlideIdx(activeSlideIdx);
+      return;
+    }
+
+    nextSlides.splice(activeSlideIdx + 1, 0, ...newSlides);
+    setSlides(nextSlides);
+    setActiveSlideIdx(activeSlideIdx + 1);
   }
 
   function updateSlide(index, data) {
@@ -202,6 +247,7 @@ export default function PresentationEditor() {
                 <SlideEditor
                   slide={activeSlide}
                   onChange={(data) => updateSlide(activeSlideIdx, data)}
+                  onImportScripture={importScriptureSlides}
                 />
               </div>
             </>

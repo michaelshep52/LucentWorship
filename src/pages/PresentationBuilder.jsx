@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { Presentation } from "@/api/entities";
 import { Plus, Radio, Save, ArrowLeft, Trash2, ChevronUp, ChevronDown, Eye } from "lucide-react";
+import { MAX_LYRICS_CHARS_PER_PAGE, PRESENTATION_FONT_PX, paginateLyrics } from "@/lib/presentation-slides";
 import SlideEditor from "../components/SlideEditor";
 import SlidePreview from "../components/SlidePreview";
 
@@ -40,6 +41,7 @@ export default function PresentationBuilder() {
       subtext: "",
       background_color: "#000000",
       font_size: "large",
+      font_px: PRESENTATION_FONT_PX,
       text_align: "center"
     };
     const updated = { ...presentation, slides: [...(presentation.slides || []), newSlide] };
@@ -53,6 +55,41 @@ export default function PresentationBuilder() {
     slides[index] = slideData;
     const updated = { ...presentation, slides };
     setPresentation(updated);
+  }
+
+  function importScriptureSlides(passage) {
+    const currentSlide = (presentation.slides || [])[selectedSlide];
+    const pages = paginateLyrics(passage.text, MAX_LYRICS_CHARS_PER_PAGE);
+    const newSlides = pages.map((pageContent, pageIndex) => ({
+      id: `${Date.now()}-scripture-${pageIndex}`,
+      type: "scripture",
+      content: pageContent,
+      subtext: pages.length > 1
+        ? `${passage.reference} (${passage.translation}) (${pageIndex + 1}/${pages.length})`
+        : `${passage.reference} (${passage.translation})`,
+      background_color: currentSlide?.background_color || "#000000",
+      background_image: currentSlide?.background_image || "",
+      font_size: "large",
+      font_px: PRESENTATION_FONT_PX,
+      text_align: currentSlide?.text_align || "center",
+    }));
+
+    const nextSlides = [...(presentation.slides || [])];
+    const shouldReplaceCurrent =
+      currentSlide?.type === "scripture" &&
+      !currentSlide?.content &&
+      !currentSlide?.subtext;
+
+    if (shouldReplaceCurrent) {
+      nextSlides.splice(selectedSlide, 1, ...newSlides);
+      setPresentation((current) => ({ ...current, slides: nextSlides }));
+      setSelectedSlide(selectedSlide);
+      return;
+    }
+
+    nextSlides.splice(selectedSlide + 1, 0, ...newSlides);
+    setPresentation((current) => ({ ...current, slides: nextSlides }));
+    setSelectedSlide(selectedSlide + 1);
   }
 
   function deleteSlide(index) {
@@ -168,6 +205,7 @@ export default function PresentationBuilder() {
               <SlideEditor
                 slide={currentSlide}
                 onChange={data => updateSlide(selectedSlide, data)}
+                onImportScripture={importScriptureSlides}
                 onSave={() => save()}
               />
             </div>

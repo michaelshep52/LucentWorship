@@ -20,7 +20,7 @@ export default function SongEditor({ song, onSave, onCancel }) {
   function setField(field, value) {
     setForm(f => ({ ...f, [field]: value }));
   }
-
+  
   function addSection() {
     const verseCount = form.sections.filter(s => s.type === "verse").length;
     setForm(f => ({

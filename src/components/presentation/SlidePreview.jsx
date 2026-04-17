@@ -1,3 +1,5 @@
+import { PRESENTATION_FONT_PX } from "@/lib/presentation-slides";
+
 export default function SlidePreview({ slide, mini = false }) {
     const fontSizeMap = {
       small: mini ? "text-[6px]" : "text-lg",
@@ -14,6 +16,7 @@ export default function SlidePreview({ slide, mini = false }) {
   
     const fontSize = fontSizeMap[slide.font_size] || fontSizeMap.large;
     const align = alignMap[slide.text_align] || alignMap.center;
+    const contentFontStyle = !mini ? { fontSize: `${slide.font_px || PRESENTATION_FONT_PX}px` } : undefined;
   
     return (
       <div
@@ -42,7 +45,7 @@ export default function SlidePreview({ slide, mini = false }) {
             </>
           ) : (
             <>
-              <p className={`font-semibold text-white leading-relaxed whitespace-pre-line ${fontSize}`}>
+              <p className={`font-semibold text-white leading-relaxed whitespace-pre-line ${fontSize}`} style={contentFontStyle}>
                 {slide.content || (mini ? "" : "Slide content")}
               </p>
               {slide.subtext && (

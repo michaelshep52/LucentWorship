@@ -1,3 +1,5 @@
+import { PRESENTATION_FONT_PX } from "@/lib/presentation-slides";
+
 export default function SlidePreview({ slide, small = false }) {
     if (!slide) return null;
   
@@ -12,11 +14,12 @@ export default function SlidePreview({ slide, small = false }) {
       xlarge: small ? "text-sm" : "text-7xl",
     };
   
-    const alignClass = {
-      left: "text-left items-start",
-      center: "text-center items-center",
-      right: "text-right items-end",
-    }[slide.text_align || "center"] || "text-center items-center";
+  const alignClass = {
+    left: "text-left items-start",
+    center: "text-center items-center",
+    right: "text-right items-end",
+  }[slide.text_align || "center"] || "text-center items-center";
+  const contentFontStyle = !small ? { fontSize: `${slide.font_px || PRESENTATION_FONT_PX}px` } : undefined;
   
     return (
       <div
@@ -31,7 +34,7 @@ export default function SlidePreview({ slide, small = false }) {
           {slide.type === "blank" ? null : (
             <>
               {slide.content && (
-                <p className={`text-white font-semibold leading-snug whitespace-pre-wrap ${fontSizes[slide.font_size || "large"]}`}>
+                <p className={`text-white font-semibold leading-snug whitespace-pre-wrap ${fontSizes[slide.font_size || "large"]}`} style={contentFontStyle}>
                   {slide.content}
                 </p>
               )}

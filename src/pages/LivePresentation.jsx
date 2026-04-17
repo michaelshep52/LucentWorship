@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { Presentation } from "@/api/entities";
 import { motion, AnimatePresence } from "framer-motion";
+import { PRESENTATION_FONT_PX } from "@/lib/presentation-slides";
 import LiveControls from "../components/live/LiveControls";
 
 export default function LivePresentation() {
@@ -149,6 +150,7 @@ function LiveSlideContent({ slide }) {
   };
 
   const fontSize = sizeMap[slide?.font_size] || sizeMap.large;
+  const contentFontStyle = { fontSize: `${slide?.font_px || PRESENTATION_FONT_PX}px` };
 
   if (slide?.type === "title") {
     return (
@@ -165,7 +167,7 @@ function LiveSlideContent({ slide }) {
 
   return (
     <>
-      <p className={`font-semibold text-white leading-relaxed whitespace-pre-line max-w-4xl ${fontSize}`}>
+      <p className={`font-semibold text-white leading-relaxed whitespace-pre-line max-w-4xl ${fontSize}`} style={contentFontStyle}>
         {slide?.content}
       </p>
       {slide?.subtext && (

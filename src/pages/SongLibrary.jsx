@@ -1,11 +1,17 @@
 import { useState, useEffect } from "react";
 import { Song } from "@/api/entities";
-import { Music, Plus, Search, Tag, Edit2, Trash2, X, Loader2 } from "lucide-react";
+import { toast } from "@/components/ui/use-toast";
+import { parseGoogleDoc, parseSongFile } from "@/lib/song-import";
+import { Music, Plus, Search, Tag, Edit2, Trash2, X, Loader2, Upload, ChevronDown, FileText, Link as LinkIcon } from "lucide-react";
 import SongEditor from "../components/SongEditor";
 
 export default function SongLibrary() {
   const [songs, setSongs] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [importing, setImporting] = useState(false);
+  const [showImportMenu, setShowImportMenu] = useState(false);
+  const [showGoogleDocInput, setShowGoogleDocInput] = useState(false);
+  const [googleDocUrl, setGoogleDocUrl] = useState("");
   const [search, setSearch] = useState("");
   const [selectedTag, setSelectedTag] = useState("");
   const [editingSong, setEditingSong] = useState(null);
@@ -31,6 +37,135 @@ export default function SongLibrary() {
     setSongs(s => s.filter(x => x.id !== id));
   }
 
+  function getMissingColumn(error) {
+    const match = error?.message?.match(/Could not find the '([^']+)' column/);
+    return match?.[1] || null;
+  }
+
+  function getImportErrorMessage(error) {
+    const message = error?.message || "The file could not be imported.";
+
+    if (message.toLowerCase().includes("row-level security")) {
+      return "Database writes are blocked by Supabase row-level security for songs.";
+    }
+
+    return message;
+  }
+
+  async function createImportedSong(payload) {
+    let nextPayload = { ...payload };
+
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      try {
+        return await Song.create(nextPayload);
+      } catch (error) {
+        const missingColumn = getMissingColumn(error);
+        if (!missingColumn || !(missingColumn in nextPayload)) {
+          throw error;
+        }
+
+        const { [missingColumn]: _drop, ...rest } = nextPayload;
+        nextPayload = rest;
+      }
+    }
+
+    return Song.create(nextPayload);
+  }
+
+  function buildImportSongPayload({ title, artist, key, tempo, tags, sections }) {
+    const payload = {
+      title,
+      artist,
+      key,
+      tags,
+      sections,
+    };
+
+    if (typeof tempo === "number" && Number.isFinite(tempo)) {
+      payload.tempo = tempo;
+    }
+
+    return payload;
+  }
+
+  async function importParsedSong(parsed) {
+    const createdSongIds = [];
+
+    try {
+      if (!parsed.sections.length) {
+        throw new Error("No song sections were found. Use headings like Verse, Chorus, Bridge, or Tag in the document.");
+      }
+
+      const tags = [...new Set(parsed.tags)];
+      const musicianTags = [...new Set([...tags, "musicians", "with-chords"])];
+
+      const lyricsSong = await createImportedSong(buildImportSongPayload({
+        title: parsed.title,
+        artist: parsed.artist,
+        key: parsed.key,
+        tempo: parsed.tempo,
+        tags,
+        sections: parsed.sections,
+      }));
+      createdSongIds.push(lyricsSong.id);
+
+      const musicianSong = await createImportedSong(buildImportSongPayload({
+        title: `${parsed.title} (Chords)`,
+        artist: parsed.artist,
+        key: parsed.key,
+        tempo: parsed.tempo,
+        tags: musicianTags,
+        sections: parsed.musicianSections,
+      }));
+      createdSongIds.push(musicianSong.id);
+
+      await loadSongs();
+      setShowImportMenu(false);
+      setShowGoogleDocInput(false);
+      setGoogleDocUrl("");
+      toast({
+        title: "Song imported",
+        description: `Created "${parsed.title}" and "${parsed.title} (Chords)".`,
+      });
+    } catch (error) {
+      console.error(error?.message || error);
+      await Promise.allSettled(createdSongIds.map((id) => Song.delete(id)));
+      toast({
+        title: "Import failed",
+        description: getImportErrorMessage(error),
+        variant: "destructive",
+      });
+    }
+  }
+
+  async function handleFileUpload(event) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+
+    setImporting(true);
+
+    try {
+      const parsed = await parseSongFile(file);
+      await importParsedSong(parsed);
+    } finally {
+      setImporting(false);
+    }
+  }
+
+  async function handleGoogleDocImport() {
+    if (!googleDocUrl.trim()) return;
+
+    setImporting(true);
+
+    try {
+      const parsed = await parseGoogleDoc(googleDocUrl.trim());
+      await importParsedSong(parsed);
+    } finally {
+      setImporting(false);
+    }
+  }
+
   const allTags = [...new Set(songs.flatMap(s => s.tags || []))].sort();
 
   const filtered = songs.filter(s => {
@@ -46,18 +181,88 @@ export default function SongLibrary() {
       {/* Song List */}
       <div className="flex-1 p-6 overflow-auto">
         {/* Header */}
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center justify-between gap-3 mb-6">
           <div>
             <h1 className="text-2xl font-bold text-foreground font-playfair">Song Library</h1>
             <p className="text-muted-foreground text-sm mt-0.5">{songs.length} songs</p>
           </div>
-          <button
-            onClick={() => { setEditingSong(null); setShowEditor(true); }}
-            className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors"
-          >
-            <Plus className="w-4 h-4" /> New Song
-          </button>
+          <div className="flex items-center gap-2 relative">
+            <button
+              onClick={() => setShowImportMenu((open) => !open)}
+              disabled={importing}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border border-border bg-card text-foreground transition-colors hover:border-primary/40 disabled:opacity-70"
+            >
+              {importing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+              {importing ? "Importing..." : "Import File"}
+              <ChevronDown className="w-4 h-4" />
+            </button>
+            {showImportMenu && !importing && (
+              <div className="absolute right-0 top-full mt-2 w-64 rounded-xl border border-border bg-card shadow-lg z-20 overflow-hidden">
+                <label className="flex items-center gap-3 px-4 py-3 text-sm text-foreground hover:bg-secondary/70 cursor-pointer">
+                  <FileText className="w-4 h-4" />
+                  <span>Local File</span>
+                  <input
+                    type="file"
+                    accept=".txt,.docx"
+                    onChange={handleFileUpload}
+                    className="hidden"
+                  />
+                </label>
+                <button
+                  onClick={() => {
+                    setShowGoogleDocInput(true);
+                    setShowImportMenu(false);
+                  }}
+                  className="w-full flex items-center gap-3 px-4 py-3 text-sm text-foreground hover:bg-secondary/70"
+                >
+                  <LinkIcon className="w-4 h-4" />
+                  <span>Google Docs</span>
+                </button>
+              </div>
+            )}
+            <button
+              onClick={() => { setEditingSong(null); setShowEditor(true); }}
+              className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors"
+            >
+              <Plus className="w-4 h-4" /> New Song
+            </button>
+          </div>
         </div>
+
+        {showGoogleDocInput && (
+          <div className="mb-5 rounded-xl border border-border bg-card p-4 flex flex-col gap-3">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <h3 className="text-sm font-semibold text-foreground">Import From Google Docs</h3>
+                <p className="text-xs text-muted-foreground">Paste a shared Google Docs link.</p>
+              </div>
+              <button
+                onClick={() => {
+                  setShowGoogleDocInput(false);
+                  setGoogleDocUrl("");
+                }}
+                className="p-1.5 rounded-md hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="flex gap-2">
+              <input
+                value={googleDocUrl}
+                onChange={(event) => setGoogleDocUrl(event.target.value)}
+                placeholder="https://docs.google.com/document/d/..."
+                className="flex-1 px-3 py-2 bg-background border border-border rounded-lg text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
+              />
+              <button
+                onClick={handleGoogleDocImport}
+                disabled={importing || !googleDocUrl.trim()}
+                className="px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50"
+              >
+                Import
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Search & Filter */}
         <div className="flex gap-3 mb-5">

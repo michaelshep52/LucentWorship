@@ -3,6 +3,7 @@ import {
   LayoutDashboard, Music, BookOpen, Presentation, Image, 
   Radio, ChevronRight, Cross
 } from "lucide-react";
+import myLogo from "@/assets/LucentWorship.png";
 
 const navItems = [
   { path: "/", label: "Dashboard", icon: LayoutDashboard },
@@ -26,8 +27,12 @@ export default function Layout() {
       <aside className="w-56 flex-shrink-0 flex flex-col border-r border-sidebar-border bg-sidebar">
         {/* Logo */}
         <div className="flex items-center gap-2.5 px-5 py-5 border-b border-sidebar-border">
-          <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
-            <Cross className="w-4 h-4 text-white" />
+          <div className="w-7 h-7 rounded-lg bg-primary flex items-center justify-center">
+            <img 
+              src={myLogo}
+              alt="LucentWorship Logo" 
+              className="w-8 h-8 object-contain" // Adjusted slightly for logos
+            />
           </div>
           <div>
             <p className="text-sm font-semibold text-sidebar-accent-foreground leading-none">WorshipFlow</p>

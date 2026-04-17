@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { supabase } from '@/api/supabaseClient';
-import { Music } from 'lucide-react';
+import myLogo from '@/assets/LucentWorship.png';
 
 export default function Login() {
   const [email, setEmail] = useState('');
@@ -21,7 +21,11 @@ export default function Login() {
     <div className="min-h-screen flex items-center justify-center bg-background p-6">
       <div className="w-full max-w-sm">
         <div className="flex items-center justify-center gap-2 mb-8">
-          <Music className="w-6 h-6 text-primary" />
+          <img 
+              src={myLogo}
+              alt="LucentWorship Logo" 
+              className="w-8 h-8 object-contain" // Adjusted slightly for logos
+            />
           <span className="text-xl font-bold font-playfair text-foreground">LucentWorship</span>
         </div>
 
