@@ -5,6 +5,7 @@ import { Plus, Radio, Save, ArrowLeft, Trash2, ChevronUp, ChevronDown, Eye } fro
 import { MAX_LYRICS_CHARS_PER_PAGE, PRESENTATION_FONT_PX, paginateLyrics } from "@/lib/presentation-slides";
 import SlideEditor from "../components/SlideEditor";
 import SlidePreview from "../components/SlidePreview";
+import ContentPickerModal from "../components/presentation/ContentPickerModal";
 
 export default function PresentationBuilder() {
   const { id } = useParams();
@@ -13,6 +14,7 @@ export default function PresentationBuilder() {
   const [selectedSlide, setSelectedSlide] = useState(0);
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [picker, setPicker] = useState(null); // null | "lyrics" | "scripture" | "text" | "countdown"
 
   useEffect(() => { loadPresentation(); }, [id]);
 
@@ -112,6 +114,55 @@ export default function PresentationBuilder() {
     save(updated);
   }
 
+  function handlePickerAdd(items) {
+    // items: [{type, payload}]  or  [{type:"scripture", payload:{bookmark}}]
+    const currentSlide = (presentation.slides || [])[selectedSlide];
+    let nextSlides = [...(presentation.slides || [])];
+    let insertAt = selectedSlide + 1;
+
+    const newSlides = [];
+
+    for (const item of items) {
+      if (item.type === "scripture") {
+        const { bookmark } = item.payload;
+        const pages = paginateLyrics(bookmark.text, MAX_LYRICS_CHARS_PER_PAGE);
+        pages.forEach((pageContent, pi) => {
+          newSlides.push({
+            id: `${Date.now()}-scripture-${pi}-${Math.random()}`,
+            type: "scripture",
+            content: pageContent,
+            subtext: pages.length > 1
+              ? `${bookmark.reference} (${bookmark.translation}) (${pi + 1}/${pages.length})`
+              : `${bookmark.reference} (${bookmark.translation})`,
+            background_color: currentSlide?.background_color || "#000000",
+            background_image: currentSlide?.background_image || "",
+            font_size: "large",
+            font_px: PRESENTATION_FONT_PX,
+            text_align: currentSlide?.text_align || "center",
+          });
+        });
+      } else {
+        newSlides.push({
+          id: `${Date.now()}-${item.type}-${Math.random()}`,
+          background_color: currentSlide?.background_color || "#000000",
+          background_image: currentSlide?.background_image || "",
+          font_size: "large",
+          font_px: PRESENTATION_FONT_PX,
+          text_align: currentSlide?.text_align || "center",
+          subtext: "",
+          ...item.payload,
+        });
+      }
+    }
+
+    nextSlides.splice(insertAt, 0, ...newSlides);
+    const updated = { ...presentation, slides: nextSlides };
+    setPresentation(updated);
+    setSelectedSlide(insertAt);
+    save(updated);
+    setPicker(null);
+  }
+
   if (loading) return <div className="flex items-center justify-center h-full"><div className="w-8 h-8 border-4 border-primary/30 border-t-primary rounded-full animate-spin" /></div>;
   if (!presentation) return <div className="p-6 text-muted-foreground">Presentation not found</div>;
 
@@ -146,9 +197,10 @@ export default function PresentationBuilder() {
       </div>
 
       <div className="flex flex-1 overflow-hidden">
-        {/* Slide Panel */}
-        <div className="w-48 border-r border-border flex flex-col bg-card overflow-auto">
-          <div className="p-2 space-y-1">
+        {/* Slide Panel — slides scroll, add-buttons are fixed at bottom */}
+        <div className="w-48 border-r border-border flex flex-col bg-card">
+          {/* Scrollable slide list */}
+          <div className="flex-1 overflow-y-auto p-2 space-y-1 min-h-0">
             {(presentation.slides || []).map((slide, i) => (
               <div key={slide.id || i}
                 onClick={() => setSelectedSlide(i)}
@@ -171,16 +223,24 @@ export default function PresentationBuilder() {
               </div>
             ))}
           </div>
-          {/* Add slide */}
-          <div className="p-2 border-t border-border mt-auto sticky bottom-0 bg-card">
-            <div className="grid grid-cols-2 gap-1">
-              {["text", "lyrics", "scripture", "blank"].map(type => (
-                <button key={type} onClick={() => addSlide(type)}
-                  className="py-1.5 text-xs bg-secondary text-muted-foreground hover:bg-secondary/80 hover:text-foreground rounded transition-colors capitalize">
-                  + {type}
-                </button>
-              ))}
-            </div>
+          {/* Add slide — always visible at bottom, never scrolls away */}
+          <div className="flex-shrink-0 p-2 border-t border-border bg-card space-y-1">
+            <p className="text-[10px] text-muted-foreground px-1 mb-1">Add slide</p>
+            {[
+              { type: "lyrics",    label: "🎵 Lyrics" },
+              { type: "scripture", label: "📖 Scripture" },
+              { type: "text",      label: "T  Text" },
+              { type: "countdown", label: "⏱ Countdown" },
+            ].map(({ type, label }) => (
+              <button key={type} onClick={() => setPicker(type)}
+                className="w-full py-1.5 text-xs bg-secondary text-muted-foreground hover:bg-secondary/80 hover:text-foreground rounded transition-colors text-left px-2">
+                {label}
+              </button>
+            ))}
+            <button onClick={() => addSlide("blank")}
+              className="w-full py-1.5 text-xs bg-secondary text-muted-foreground hover:bg-secondary/80 hover:text-foreground rounded transition-colors text-left px-2">
+              ☐  Blank
+            </button>
           </div>
         </div>
 
@@ -204,7 +264,7 @@ export default function PresentationBuilder() {
             <div className="h-64 border-t border-border bg-card overflow-auto p-4">
               <SlideEditor
                 slide={currentSlide}
-                onChange={data => updateSlide(selectedSlide, data)}
+                onChange={data => setPresentation(p => { const slides = [...(p.slides || [])]; slides[selectedSlide] = data; return { ...p, slides }; })}
                 onImportScripture={importScriptureSlides}
                 onSave={() => save()}
               />
@@ -212,6 +272,14 @@ export default function PresentationBuilder() {
           )}
         </div>
       </div>
+
+      {picker && (
+        <ContentPickerModal
+          defaultTab={picker}
+          onAdd={handlePickerAdd}
+          onClose={() => setPicker(null)}
+        />
+      )}
     </div>
   );
 }
