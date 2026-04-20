@@ -561,7 +561,7 @@ export default function PresentationBuilder() {
 
           {/* Add slide */}
           <div className="flex-shrink-0 p-2 border-t border-border bg-card space-y-1">
-            <p className="text-[10px] text-muted-foreground px-1 mb-1">Add slide</p>
+            <p className="text-[15px] text-muted-foreground px-1 mb-1">Add slide</p>
             {[
               { type: "lyrics",    label: "🎵 Lyrics" },
               { type: "scripture", label: "📖 Scripture" },
@@ -569,12 +569,12 @@ export default function PresentationBuilder() {
               { type: "countdown", label: "⏱ Countdown" },
             ].map(({ type, label }) => (
               <button key={type} onClick={() => setPicker(type)}
-                className="w-full py-1.5 text-xs bg-secondary text-muted-foreground hover:bg-secondary/80 hover:text-foreground rounded transition-colors text-left px-2">
+                className="w-full py-1.5 text-l bg-secondary text-muted-foreground hover:bg-secondary/80 hover:text-foreground rounded transition-colors text-left px-2">
                 {label}
               </button>
             ))}
             <button onClick={() => addSlide("blank")}
-              className="w-full py-1.5 text-xs bg-secondary text-muted-foreground hover:bg-secondary/80 hover:text-foreground rounded transition-colors text-left px-2">
+              className="w-full py-1.5 text-l bg-secondary text-muted-foreground hover:bg-secondary/80 hover:text-foreground rounded transition-colors text-left px-2">
               ☐  Blank
             </button>
           </div>
@@ -582,8 +582,8 @@ export default function PresentationBuilder() {
 
         {/* Main: Preview + Editor */}
         <div className="flex-1 flex flex-col overflow-hidden">
-          {/* Preview */}
-          <div className="flex-1 flex items-center justify-center bg-black/50 p-4">
+          {/* Preview — 60% */}
+          <div className="flex items-center justify-center bg-black/50 p-4" style={{flex: "0 0 60%"}}>
             {currentSlide ? (
               <div className="w-full max-w-3xl">
                 <SlidePreview slide={currentSlide} />
@@ -595,9 +595,9 @@ export default function PresentationBuilder() {
               </div>
             )}
           </div>
-          {/* Editor */}
+          {/* Editor — 40% */}
           {currentSlide && (
-            <div className="h-64 border-t border-border bg-card overflow-auto p-4">
+            <div className="border-t border-border bg-card overflow-hidden p-3" style={{flex: "0 0 40%"}}>
               <SlideEditor
                 slide={currentSlide}
                 onChange={data => setPresentation(p => { const slides = [...(p.slides || [])]; slides[selectedSlide] = data; return { ...p, slides }; })}
