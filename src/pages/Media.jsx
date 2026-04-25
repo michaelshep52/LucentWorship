@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef } from "react";
-import { MediaAsset, uploadFile } from "@/api/entities";
-import { Image, Plus, Search, Trash2, Upload, Tag } from "lucide-react";
+import { MediaAsset, getErrorMessage, uploadFile } from "@/api/entities";
+import { Image, Plus, Search, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { toast } from "@/components/ui/use-toast";
 import {
   Dialog,
   DialogContent,
@@ -21,7 +22,6 @@ export default function Media() {
   const [uploading, setUploading] = useState(false);
   const [name, setName] = useState("");
   const [type, setType] = useState("background");
-  const [tagsInput, setTagsInput] = useState("");
   const fileRef = useRef(null);
 
   useEffect(() => {
@@ -29,28 +29,48 @@ export default function Media() {
   }, []);
 
   async function loadAssets() {
-    const data = await MediaAsset.list("-created_date", 500);
-    setAssets(data);
-    setLoading(false);
+    try {
+      const data = await MediaAsset.list("-created_date", 500);
+      setAssets(data);
+    } catch (error) {
+      console.error(error);
+      setAssets([]);
+      toast({
+        title: "Media failed to load",
+        description: getErrorMessage(error, "Could not load media assets."),
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
   }
 
   async function handleUpload() {
     const file = fileRef.current?.files?.[0];
     if (!file || !name) return;
     setUploading(true);
-    const { file_url } = await uploadFile({ file });
-    await MediaAsset.create({
-      name,
-      type,
-      file_url,
-      tags: tagsInput.split(",").map((t) => t.trim()).filter(Boolean),
-    });
-    setShowUpload(false);
-    setName("");
-    setTagsInput("");
-    setUploading(false);
-    setLoading(true);
-    await loadAssets();
+    try {
+      const { url, size } = await uploadFile({ file });
+      await MediaAsset.create({
+        name,
+        type,
+        url,
+        size,
+      });
+      setShowUpload(false);
+      setName("");
+      setLoading(true);
+      await loadAssets();
+    } catch (error) {
+      console.error(error);
+      toast({
+        title: "Upload failed",
+        description: getErrorMessage(error, "The selected media could not be uploaded."),
+        variant: "destructive",
+      });
+    } finally {
+      setUploading(false);
+    }
   }
 
   async function handleDelete(id) {
@@ -108,10 +128,6 @@ export default function Media() {
                   </SelectContent>
                 </Select>
               </div>
-              <div>
-                <Label>Tags (comma-separated)</Label>
-                <Input value={tagsInput} onChange={(e) => setTagsInput(e.target.value)} placeholder="worship, nature, abstract" />
-              </div>
               <div className="flex justify-end gap-2">
                 <Button variant="outline" onClick={() => setShowUpload(false)}>Cancel</Button>
                 <Button onClick={handleUpload} disabled={uploading || !name}>
@@ -161,15 +177,7 @@ export default function Media() {
               <div className="p-3">
                 <p className="text-sm font-medium truncate">{asset.name}</p>
                 <p className="text-[10px] text-muted-foreground uppercase tracking-wider mt-0.5">{asset.type}</p>
-                {(asset.tags || []).length > 0 && (
-                  <div className="flex flex-wrap gap-1 mt-2">
-                    {asset.tags.slice(0, 3).map((tag) => (
-                      <span key={tag} className="inline-flex items-center gap-0.5 text-[10px] text-muted-foreground">
-                        <Tag className="w-2.5 h-2.5" /> {tag}
-                      </span>
-                    ))}
-                  </div>
-                )}
+                {asset.size ? <p className="text-[10px] text-muted-foreground mt-0.5">{Math.round(asset.size / 1024)} KB</p> : null}
               </div>
             </div>
           ))}

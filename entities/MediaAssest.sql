@@ -1,7 +1,13 @@
 {
-  "name": "MediaAsset",
+  "name": "Media",
+  "table": "media",
   "type": "object",
   "properties": {
+    "id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Media row ID"
+    },
     "name": {
       "type": "string",
       "description": "Asset name"
@@ -15,23 +21,23 @@
       ],
       "description": "Asset type"
     },
-    "file_url": {
+    "url": {
       "type": "string",
+      "format": "uri",
       "description": "URL of the uploaded file"
     },
-    "thumbnail_url": {
-      "type": "string",
-      "description": "Thumbnail URL"
+    "size": {
+      "type": "integer",
+      "description": "File size in bytes"
     },
-    "tags": {
-      "type": "array",
-      "items": {
-        "type": "string"
-      }
+    "created_date": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Created timestamp"
     }
   },
   "required": [
     "name",
-    "file_url"
+    "url"
   ]
 }

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import { Song, ScriptureBookmark, MediaAsset, uploadFile } from "@/api/entities";
+import { Song, ScriptureBookmark, MediaAsset, getErrorMessage, uploadFile } from "@/api/entities";
 import { Music, BookOpen, Image, Upload, Loader2, X } from "lucide-react";
+import { toast } from "@/components/ui/use-toast";
 
 const FONT_SIZES = ["small", "medium", "large", "xlarge"];
 const SLIDE_TYPES = ["text", "lyrics", "scripture", "title", "blank", "image"];
@@ -44,11 +45,16 @@ export default function SlideEditor({ slide, onChange, onSave, onImportScripture
     if (!file) return;
     setUploading(true);
     try {
-      const { file_url } = await uploadFile({ file });
-      update({ background_image: file_url });
+      const { url } = await uploadFile({ file });
+      update({ background_image: url });
       setShowBgPicker(false);
     } catch (err) {
       console.error("Upload failed:", err);
+      toast({
+        title: "Upload failed",
+        description: getErrorMessage(err, "The background image could not be uploaded."),
+        variant: "destructive",
+      });
     } finally {
       setUploading(false);
     }

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { BookOpen, ChevronRight, Loader2, Save, Search, Trash2 } from "lucide-react";
-import { ScriptureBookmark } from "@/api/entities";
+import { BookOpen, ChevronRight, Loader2, Save, Trash2 } from "lucide-react";
+import { ScriptureBookmark, getErrorMessage } from "@/api/entities";
 import { BOOKS, DESIRED_TRANSLATION_LABELS, getBookOptionsByTestament, resolveLastChapterNumber } from "@/lib/bible-api";
 import { toast } from "@/components/ui/use-toast";
 
@@ -26,6 +26,14 @@ export default function ScriptureBrowser() {
     try {
       const data = await ScriptureBookmark.list("-updated_date", 200);
       setBookmarks(data);
+    } catch (error) {
+      console.error(error);
+      setBookmarks([]);
+      toast({
+        title: "Scripture failed to load",
+        description: getErrorMessage(error, "Could not load scripture bookmarks."),
+        variant: "destructive",
+      });
     } finally {
       setLoading(false);
     }

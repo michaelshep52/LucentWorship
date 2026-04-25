@@ -1,7 +1,13 @@
 {
   "name": "Song",
+  "table": "songs",
   "type": "object",
   "properties": {
+    "id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Song row ID"
+    },
     "title": {
       "type": "string",
       "description": "Song title"
@@ -74,6 +80,16 @@
     "notes": {
       "type": "string",
       "description": "Internal notes"
+    },
+    "created_date": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Created timestamp"
+    },
+    "updated_date": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Updated timestamp"
     }
   },
   "required": [

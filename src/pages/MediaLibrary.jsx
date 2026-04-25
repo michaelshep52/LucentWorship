@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
-import { MediaAsset, uploadFile } from "@/api/entities";
+import { MediaAsset, getErrorMessage, uploadFile } from "@/api/entities";
 import { Image, Plus, Trash2, Upload, Search, Loader2, X } from "lucide-react";
+import { toast } from "@/components/ui/use-toast";
 
 export default function MediaLibrary() {
   const [assets, setAssets] = useState([]);
@@ -15,29 +16,54 @@ export default function MediaLibrary() {
 
   async function loadAssets() {
     setLoading(true);
-    const data = await MediaAsset.list('-created_date');
-    setAssets(data);
-    setLoading(false);
+    try {
+      const data = await MediaAsset.list('-created_date');
+      setAssets(data);
+    } catch (error) {
+      console.error(error);
+      setAssets([]);
+      toast({
+        title: "Media failed to load",
+        description: getErrorMessage(error, "Could not load media assets."),
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
   }
 
   async function handleUpload(e) {
+    const input = e.target;
     const files = Array.from(e.target.files);
     if (!files.length) return;
     setUploading(true);
-    for (const file of files) {
-      const { file_url } = await uploadFile({ file });
-      const type = file.type.startsWith("video") ? "video" : "image";
-      await MediaAsset.create({
-        name: file.name.replace(/\.[^.]+$/, ""),
-        type,
-        file_url,
-        thumbnail_url: type === "image" ? file_url : "",
-        tags: []
+    try {
+      for (const file of files) {
+        const { url, size } = await uploadFile({ file });
+        const type = file.type.startsWith("video") ? "video" : "image";
+        await MediaAsset.create({
+          name: file.name.replace(/\.[^.]+$/, ""),
+          type,
+          url,
+          size,
+        });
+      }
+      await loadAssets();
+      toast({
+        title: "Media uploaded",
+        description: files.length === 1 ? files[0].name : `${files.length} files uploaded.`,
       });
+    } catch (error) {
+      console.error(error);
+      toast({
+        title: "Upload failed",
+        description: getErrorMessage(error, "The selected media could not be uploaded."),
+        variant: "destructive",
+      });
+    } finally {
+      setUploading(false);
+      input.value = "";
     }
-    await loadAssets();
-    setUploading(false);
-    e.target.value = "";
   }
 
   async function deleteAsset(id) {
