@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useLayoutEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Presentation } from "@/api/entities";
 import { ArrowLeft, Plus, Play, Save, Trash2, Image, Type, BookOpen, Music } from "lucide-react";
@@ -7,6 +7,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { MAX_LYRICS_CHARS_PER_PAGE, PRESENTATION_FONT_PX, paginateLyrics } from "@/lib/presentation-slides";
+import { createPresentationSaveGuard, protectPendingSave } from "@/lib/presentation-save";
+import { presentationDraftKey, presentationLeaveReason } from "@/lib/presentation-draft";
+import { loadLivePresentation } from "@/lib/live-presentation";
 import SlideEditor from "../components/presentation/SlideEditor";
 import SlidePreview from "../components/presentation/SlidePreview";
 import SongPicker from "../components/presentation/SongPicker";
@@ -21,25 +24,47 @@ export default function PresentationEditor() {
   const [status, setStatus] = useState("draft");
   const [date, setDate] = useState("");
   const [slides, setSlides] = useState([]);
+  const [savedDraftKey, setSavedDraftKey] = useState(() => presentationDraftKey());
+  const draftKey = presentationDraftKey({ title, status, date, slides });
+  const dirty = draftKey !== savedDraftKey;
+  const dirtyRef = useRef(false);
+  useLayoutEffect(() => { dirtyRef.current = dirty; }, [dirty]);
   const [activeSlideIdx, setActiveSlideIdx] = useState(0);
   const [loading, setLoading] = useState(!isNew);
+  const [loadError, setLoadError] = useState('');
+  const [loadAttempt, setLoadAttempt] = useState(0);
+  const [loadedId, setLoadedId] = useState(isNew ? 'new' : null);
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState('');
+  const saveGuard = useRef(createPresentationSaveGuard());
+  const mounted = useRef(true);
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   const [showSongPicker, setShowSongPicker] = useState(false);
+  useEffect(() => {
+    const protect = event => protectPendingSave(event, saveGuard.current.isSaving() || dirtyRef.current);
+    window.addEventListener('beforeunload', protect);
+    return () => window.removeEventListener('beforeunload', protect);
+  }, []);
 
   useEffect(() => {
-    if (!isNew) {
-      Presentation.filter({ id: presId }).then((data) => {
-        if (data.length > 0) {
-          const p = data[0];
-          setTitle(p.title);
-          setStatus(p.status || "draft");
-          setDate(p.date || "");
-          setSlides(p.slides || []);
-        }
-        setLoading(false);
-      });
+    setLoadError('');
+    if (isNew) {
+      setTitle(''); setStatus('draft'); setDate(''); setSlides([]);
+      setSavedDraftKey(presentationDraftKey()); setActiveSlideIdx(0);
+      setLoadedId('new'); setLoading(false);
+      return;
     }
-  }, [presId, isNew]);
+    if (!presId) { setLoadError('No presentation was selected.'); setLoading(false); return; }
+    return loadLivePresentation(presId, id => Presentation.filter({ id }), state => {
+      setLoading(state.status === 'loading');
+      if (state.status === 'error') { setLoadError(state.error); return; }
+      if (state.status !== 'ready') return;
+      const p = state.presentation;
+      const draft = { title: p.title || '', status: p.status || 'draft', date: p.date || '', slides: p.slides };
+      setTitle(draft.title); setStatus(draft.status); setDate(draft.date); setSlides(draft.slides);
+      setSavedDraftKey(presentationDraftKey(draft)); setActiveSlideIdx(0); setLoadedId(presId);
+    });
+  }, [presId, isNew, loadAttempt]);
 
   function addSlide(type = "text") {
     const newSlide = {
@@ -128,18 +153,38 @@ export default function PresentationEditor() {
   }
 
   async function handleSave() {
-    setSaving(true);
-    const data = { title, status, date: date || undefined, slides };
-    if (isNew) {
-      const created = await Presentation.create(data);
-      navigate(`/presentations/${created.id}`, { replace: true });
-    } else {
-      await Presentation.update(presId, data);
-    }
+    if (!title.trim()) { setSaveError('Give the presentation a title before saving.'); return; }
+    const result = await saveGuard.current.run(async () => {
+      setSaving(true); setSaveError('');
+      // Capture this click's draft. Later edits are not represented by this request.
+      const data = structuredClone({ title, status, date: date || undefined, slides });
+      if (isNew) {
+        const created = await Presentation.create(data);
+        if (!created?.id) throw new Error('Save response did not identify a presentation.');
+        if (mounted.current) navigate(`/presentations/${created.id}`, { replace: true });
+      } else {
+        await Presentation.update(presId, data);
+      }
+      if (mounted.current) setSavedDraftKey(presentationDraftKey(data));
+    });
+    if (result.status === 'busy' || !mounted.current) return;
     setSaving(false);
+    if (result.status === 'uncertain') setSaveError('Save could not be confirmed. Your draft is still here. Check the presentation library before retrying, especially for a new presentation, to avoid duplicates.');
   }
 
-  if (loading) {
+  function navigateFromEditor(path) {
+    const reason = presentationLeaveReason({ saving: saveGuard.current.isSaving(), dirty: dirtyRef.current });
+    if (reason) { setSaveError(reason); return; }
+    navigate(path);
+  }
+
+  if (loadError) return <div className="p-6 space-y-3">
+    <p role="alert">{loadError} Editing is unavailable until this presentation loads.</p>
+    <Button onClick={() => setLoadAttempt(value => value + 1)}>Retry loading</Button>
+    <Button variant="outline" onClick={() => navigateFromEditor('/presentations')}>Back to presentations</Button>
+  </div>;
+
+  if (loading || loadedId !== presId) {
     return (
       <div className="flex items-center justify-center h-full">
         <div className="w-8 h-8 border-4 border-muted border-t-primary rounded-full animate-spin" />
@@ -154,10 +199,13 @@ export default function PresentationEditor() {
   const activeSlide = slides[activeSlideIdx];
 
   return (
-    <div className="h-full flex flex-col">
+    <fieldset disabled={saving} className="h-full min-w-0 flex flex-col"
+      onClickCapture={event => { if (saveGuard.current.isSaving()) { event.preventDefault(); event.stopPropagation(); } }}>
+      {!saving && dirty && <p role="status" className="p-2 text-sm">Unsaved presentation changes</p>}
+      {saving && <p role="status" className="p-2 text-sm">Saving this draft. Editing and navigation are temporarily paused.</p>}
       {/* Header */}
       <div className="border-b border-border px-6 py-3 flex items-center gap-4">
-        <Button variant="ghost" size="sm" onClick={() => navigate("/presentations")}>
+        <Button variant="ghost" size="sm" onClick={() => navigateFromEditor("/presentations")}>
           <ArrowLeft className="w-4 h-4" />
         </Button>
         <Input
@@ -166,7 +214,7 @@ export default function PresentationEditor() {
           placeholder="Presentation title"
           className="text-lg font-semibold border-none bg-transparent focus-visible:ring-0 px-0 max-w-md"
         />
-        <Select value={status} onValueChange={setStatus}>
+        <Select disabled={saving} value={status} onValueChange={setStatus}>
           <SelectTrigger className="w-28">
             <SelectValue />
           </SelectTrigger>
@@ -183,11 +231,13 @@ export default function PresentationEditor() {
           {saving ? "Saving..." : "Save"}
         </Button>
         {slides.length > 0 && !isNew && (
-          <Button onClick={() => navigate(`/live/${presId}`)} className="gap-2">
+          <Button onClick={() => navigateFromEditor(`/live/${presId}`)} className="gap-2">
             <Play className="w-4 h-4" /> Go Live
           </Button>
         )}
       </div>
+
+      {saveError && <p role="alert" className="border border-red-400 p-3 text-red-600">{saveError}</p>}
 
       <div className="flex-1 flex overflow-hidden">
         {/* Slide list sidebar */}
@@ -246,6 +296,8 @@ export default function PresentationEditor() {
               <div className="border-t border-border bg-card p-4">
                 <SlideEditor
                   slide={activeSlide}
+                  onSave={handleSave}
+                  saveDisabled={saving || !title}
                   onChange={(data) => updateSlide(activeSlideIdx, data)}
                   onImportScripture={importScriptureSlides}
                 />
@@ -263,6 +315,6 @@ export default function PresentationEditor() {
           )}
         </div>
       </div>
-    </div>
+    </fieldset>
   );
 }

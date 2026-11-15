@@ -6,6 +6,7 @@ import {
 } from "lucide-react";
 
 // ─── Slide mini-preview ──────────────────────────────────────────────────────
+/** @param {{ bgColor?: string, bgImage?: string, children: import("react").ReactNode }} props */
 function MiniSlide({ bgColor = "#000", bgImage, children }) {
   return (
     <div

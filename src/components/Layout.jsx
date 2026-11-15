@@ -1,3 +1,5 @@
+import { useRef } from "react";
+import { createEditorNavigationGuard } from "@/lib/editor-navigation";
 import { Outlet, Link, useLocation } from "react-router-dom";
 import { 
   LayoutDashboard, Music, BookOpen, Presentation, Image, 
@@ -15,6 +17,7 @@ const navItems = [
 
 export default function Layout() {
   const location = useLocation();
+  const navigation = useRef(createEditorNavigationGuard()).current;
 
   const isActive = (path) => {
     if (path === "/") return location.pathname === "/";
@@ -46,6 +49,7 @@ export default function Layout() {
             <Link
               key={path}
               to={path}
+              onClick={navigation.handleLinkClick}
               className={`flex items-center gap-3 px-3 py-2.5 rounded-md text-sm font-medium transition-all duration-150 group ${
                 isActive(path)
                   ? "bg-primary/20 text-primary"
@@ -63,6 +67,7 @@ export default function Layout() {
         <div className="p-3 border-t border-sidebar-border">
           <Link
             to="/live"
+            onClick={navigation.handleLinkClick}
             className="flex items-center justify-center gap-2 w-full py-2.5 rounded-md bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 transition-all duration-150 animate-pulse-glow"
           >
             <Radio className="w-4 h-4" />
@@ -73,7 +78,7 @@ export default function Layout() {
 
       {/* Main Content */}
       <main className="flex-1 overflow-auto">
-        <Outlet />
+        <Outlet context={navigation} />
       </main>
     </div>
   );

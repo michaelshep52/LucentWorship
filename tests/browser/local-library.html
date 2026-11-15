@@ -1,0 +1,57 @@
+<!doctype html><html lang="en"><meta charset="utf-8"><title>Lucent local-library verification</title>
+<h1>Isolated local-library verification</h1>
+<p>This test uses a new temporary IndexedDB database only. No login, network data, or existing Lucent library is read.</p>
+<button id="run">Run persistence checks</button><pre id="result">Not run</pre>
+<script type="module">
+import { createLocalLibrary, RevisionConflictError } from '../../src/lib/local-library/repository.js';
+import { openLocalLibraryDatabase } from '../../src/lib/local-library/indexeddb.js';
+const button = document.querySelector('#run'), output = document.querySelector('#result');
+button.onclick = async () => {
+  button.disabled = true;
+  const name = `lucent-verification-${crypto.randomUUID()}`;
+  let driver;
+  const lines = [];
+  const check = (condition, message) => { if (!condition) throw new Error(message); lines.push(`PASS: ${message}`); output.textContent = lines.join('\n'); };
+  try {
+    driver = await openLocalLibraryDatabase({ name });
+    let library = createLocalLibrary(driver);
+    await library.save('songs', 'test-song', { title: 'Synthetic song', sections: [] }, { expectedRevision: 0 });
+    driver.close();
+    driver = await openLocalLibraryDatabase({ name });
+    library = createLocalLibrary(driver);
+    check((await library.get('songs', 'test-song')).document.title === 'Synthetic song', 'record survives close and reopen');
+    const results = await Promise.allSettled([
+      library.save('songs', 'test-song', { title: 'Editor A' }, { expectedRevision: 1 }),
+      library.save('songs', 'test-song', { title: 'Editor B' }, { expectedRevision: 1 }),
+    ]);
+    check(results.filter(r => r.status === 'fulfilled').length === 1 && results.some(r => r.status === 'rejected' && r.reason instanceof RevisionConflictError), 'simultaneous writers produce one revision conflict');
+    try {
+      await driver.transaction('readwrite', async tx => {
+        await tx.put({ key: 'songs:rollback', collection: 'songs', id: 'rollback', revision: 1, deleted: false, document: {} });
+        throw new Error('synthetic rollback');
+      });
+    } catch (error) { check(error.message === 'synthetic rollback', 'transaction surfaces callback failure'); }
+    check(await library.get('songs', 'rollback') === null, 'aborted transaction leaves no record');
+    await library.setDeleted('songs', 'test-song', true, { expectedRevision: 2 });
+    check(await library.get('songs', 'test-song') === null, 'deleted item hidden');
+    await library.setDeleted('songs', 'test-song', false, { expectedRevision: 3 });
+    check((await library.get('songs', 'test-song')).revision === 4, 'deleted item restores without content loss');
+    const backup = await library.exportBackup();
+    check(JSON.parse(backup).scope === 'documents-only', 'backup explicitly excludes media bytes');
+    try { await library.restoreIntoEmptyLibrary(backup); throw new Error('Expected restore refusal'); }
+    catch (error) { check(error.message.includes('empty local library'), 'restore refuses to overwrite existing data'); }
+    lines.push('ALL CHECKS PASSED');
+  } catch (error) { lines.push(`FAIL: ${error.message}`); }
+  finally {
+    driver?.close();
+    await new Promise(resolve => {
+      const request = indexedDB.deleteDatabase(name);
+      request.onsuccess = resolve;
+      request.onerror = () => { lines.push('Temporary database cleanup failed'); resolve(); };
+      request.onblocked = () => { lines.push('Temporary database cleanup blocked'); resolve(); };
+    });
+    output.textContent = lines.join('\n');
+    button.disabled = false;
+  }
+};
+</script></html>

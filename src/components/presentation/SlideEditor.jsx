@@ -12,7 +12,7 @@ const BG_PRESETS = [
 
 // Fully controlled — no internal form state. `slide` is the source of truth.
 // Changes are sent up immediately via onChange; parent owns the state.
-export default function SlideEditor({ slide, onChange, onSave, onImportScripture }) {
+export default function SlideEditor({ slide, onChange, onSave, onImportScripture, saveDisabled = false }) {
   const [songs, setSongs]             = useState([]);
   const [bookmarks, setBookmarks]     = useState([]);
   const [mediaAssets, setMediaAssets] = useState([]);
@@ -269,7 +269,7 @@ export default function SlideEditor({ slide, onChange, onSave, onImportScripture
           </div>
         )}
 
-        <button onClick={onSave} className="ml-auto px-3 py-1 bg-primary/20 text-primary rounded text-xs hover:bg-primary/30 transition-colors">
+        <button onClick={onSave} disabled={saveDisabled} className="ml-auto px-3 py-1 bg-primary/20 text-primary rounded text-xs hover:bg-primary/30 transition-colors">
           Save Changes
         </button>
       </div>

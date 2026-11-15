@@ -1,5 +1,3 @@
-import mammoth from "mammoth";
-
 const SECTION_NAME_MAP = {
   verse: "verse",
   chorus: "chorus",
@@ -92,13 +90,13 @@ function parseSectionHeader(line) {
   return {
     type,
     suffix: suffix || "",
-    label: sectionLabel(type, suffix || "", { verse: 0 }),
   };
 }
 
 function sectionLabel(type, suffix, counts) {
   if (type === "verse") {
     if (suffix) {
+      if (/^\d+$/.test(suffix)) counts.verse = Math.max(counts.verse, Number(suffix));
       return `Verse ${suffix.toUpperCase()}`;
     }
     counts.verse += 1;
@@ -148,15 +146,16 @@ export function parseSongContent(text, fileName = "Imported Song.txt") {
       continue;
     }
 
-    const sectionHeader = parseSectionHeader(line);
-
-    if (!titleCaptured && !currentSection && !parseMetadataLine(line, metadata) && !sectionHeader) {
-      metadata.title = metadata.title || line;
-      titleCaptured = true;
+    if (!currentSection && parseMetadataLine(line, metadata)) {
+      if (metadata.title) titleCaptured = true;
       continue;
     }
 
-    if (!currentSection && parseMetadataLine(line, metadata)) {
+    const sectionHeader = parseSectionHeader(line);
+
+    if (!titleCaptured && !currentSection && !sectionHeader) {
+      metadata.title = metadata.title || line;
+      titleCaptured = true;
       continue;
     }
 
@@ -174,7 +173,7 @@ export function parseSongContent(text, fileName = "Imported Song.txt") {
     if (!currentSection) {
       currentSection = {
         type: "verse",
-        label: "Verse 1",
+        suffix: "",
         lyrics: [],
       };
       rawSections.push(currentSection);
@@ -213,6 +212,7 @@ export async function parseSongFile(file) {
   let text = "";
 
   if (lowerName.endsWith(".docx")) {
+    const { default: mammoth } = await import("mammoth");
     const arrayBuffer = await file.arrayBuffer();
     const result = await mammoth.extractRawText({ arrayBuffer });
     text = result.value;

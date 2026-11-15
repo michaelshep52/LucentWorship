@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { Presentation } from "@/api/entities";
-import { ChevronLeft, ChevronRight, Radio, Eye, EyeOff, Monitor, Timer, X, Grid, Maximize2 } from "lucide-react";
+import { loadLivePresentation } from "@/lib/live-presentation";
+import { getLiveCommand, createCountdownController } from "@/lib/live-controls";
+import { ChevronLeft, ChevronRight, Radio, Eye, EyeOff, Timer, Grid } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import SlidePreview from "../components/SlidePreview";
 
@@ -10,7 +12,10 @@ export default function LiveMode() {
 
   const [presentations, setPresentations] = useState([]);
   const [selected, setSelected] = useState(presentationId || "");
-  const [presentation, setPresentation] = useState(null);
+  const [liveState, setLiveState] = useState({ status: "idle", presentation: null, error: "" });
+  const presentation = String(liveState.presentation?.id) === String(selected) ? liveState.presentation : null;
+  const [retry, setRetry] = useState(0);
+  const [listError, setListError] = useState("");
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isBlack, setIsBlack] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -22,23 +27,27 @@ export default function LiveMode() {
   const [countdownSeconds, setCountdownSeconds] = useState(0);
   const [countdownActive, setCountdownActive] = useState(false);
   const [countdownRemaining, setCountdownRemaining] = useState(0);
-  const intervalRef = useRef(null);
+  const countdownRef = useRef(null);
+  const [countdownError, setCountdownError] = useState("");
 
   useEffect(() => {
+    let active = true;
+    setLoading(true);
+    setListError("");
     Presentation.list().then(data => {
-      setPresentations(data);
-      setLoading(false);
+      if (active) setPresentations(data);
+    }).catch(() => {
+      if (active) setListError("Unable to load your presentation list. Check your connection and retry.");
+    }).finally(() => {
+      if (active) setLoading(false);
     });
-  }, []);
+    return () => { active = false; };
+  }, [retry]);
 
   useEffect(() => {
-    if (selected) loadPresentation(selected);
-  }, [selected]);
-
-  async function loadPresentation(id) {
-    const data = await Presentation.filter({ id });
-    if (data?.[0]) { setPresentation(data[0]); setCurrentIndex(0); }
-  }
+    setCurrentIndex(0);
+    return loadLivePresentation(selected, id => Presentation.filter({ id }), setLiveState);
+  }, [selected, retry]);
 
   const slides = presentation?.slides || [];
   const currentSlide = slides[currentIndex];
@@ -54,34 +63,40 @@ export default function LiveMode() {
 
   useEffect(() => {
     function handleKey(e) {
-      if (e.target.tagName === "INPUT" || e.target.tagName === "SELECT") return;
-      if (e.key === "ArrowRight" || e.key === "ArrowDown" || e.key === " ") go(1);
-      if (e.key === "ArrowLeft" || e.key === "ArrowUp") go(-1);
-      if (e.key === "b" || e.key === "B") setIsBlack(b => !b);
-      if (e.key === "Escape") setIsBlack(false);
-      if (e.key === "p" || e.key === "P") setPresenterView(v => !v);
+      const command = getLiveCommand(e);
+      if (!command) return;
+      e.preventDefault();
+      if (command === "next") go(1);
+      if (command === "previous") go(-1);
+      if (command === "blank") setIsBlack(value => !value);
+      if (command === "unblank") setIsBlack(false);
+      if (command === "presenter") setPresenterView(value => !value);
     }
     window.addEventListener("keydown", handleKey);
     return () => window.removeEventListener("keydown", handleKey);
   }, [go]);
 
-  // Countdown logic
+  useEffect(() => {
+    const controller = createCountdownController({
+      onChange: (remaining, active) => {
+        setCountdownRemaining(remaining);
+        setCountdownActive(active);
+      },
+    });
+    countdownRef.current = controller;
+    return () => { controller.dispose(); countdownRef.current = null; };
+  }, []);
+
   function startCountdown() {
-    const total = (countdownMinutes * 60) + countdownSeconds;
-    setCountdownRemaining(total);
-    setCountdownActive(true);
-    intervalRef.current = setInterval(() => {
-      setCountdownRemaining(r => {
-        if (r <= 1) { clearInterval(intervalRef.current); setCountdownActive(false); return 0; }
-        return r - 1;
-      });
-    }, 1000);
+    try {
+      countdownRef.current?.start(countdownMinutes, countdownSeconds);
+      setCountdownError("");
+    } catch (error) { setCountdownError(error.message); }
   }
 
   function stopCountdown() {
-    clearInterval(intervalRef.current);
-    setCountdownActive(false);
-    setCountdownRemaining(0);
+    countdownRef.current?.stop();
+    setCountdownError("");
   }
 
   function formatTime(secs) {
@@ -90,7 +105,6 @@ export default function LiveMode() {
     return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
   }
 
-  useEffect(() => () => clearInterval(intervalRef.current), []);
 
   return (
     <div className="flex flex-col h-screen bg-background">
@@ -155,6 +169,17 @@ export default function LiveMode() {
             </button>
           )}
         </div>
+      )}
+
+      {countdownError && <p role="alert" className="px-5 py-2 text-destructive text-sm">{countdownError}</p>}
+      {(listError || liveState.error) && (
+        <div role="alert" className="px-5 py-3 bg-destructive/10 text-destructive text-sm flex items-center gap-3">
+          <span>{liveState.error || listError}</span>
+          <button onClick={() => setRetry(value => value + 1)} className="underline font-semibold">Retry</button>
+        </div>
+      )}
+      {(loading || liveState.status === "loading") && (
+        <p role="status" className="px-5 py-2 text-sm text-muted-foreground">Loading presentation data…</p>
       )}
 
       {/* Main Body */}

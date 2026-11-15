@@ -10,7 +10,7 @@ export default function MediaLibrary() {
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState("");
   const [preview, setPreview] = useState(null);
-  const fileRef = useRef();
+  const fileRef = useRef(/** @type {HTMLInputElement | null} */ (null));
 
   useEffect(() => { loadAssets(); }, []);
 

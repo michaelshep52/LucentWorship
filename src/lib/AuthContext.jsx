@@ -1,7 +1,8 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
 import { supabase } from '@/api/supabaseClient';
 
-const AuthContext = createContext();
+/** @typedef {{ user: import('@supabase/supabase-js').User | null, isAuthenticated: boolean, isLoadingAuth: boolean, isLoadingPublicSettings: boolean, authError: null, logout: () => Promise<void> }} AuthState */
+const AuthContext = createContext(/** @type {AuthState | null} */ (null));
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);

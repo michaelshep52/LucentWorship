@@ -1,8 +1,15 @@
-import { useState, useEffect, useCallback } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useState, useEffect, useCallback, useRef, useLayoutEffect } from "react";
+import { useParams, useNavigate, useOutletContext } from "react-router-dom";
 import { Presentation } from "@/api/entities";
 import { Plus, Radio, Save, ArrowLeft, Trash2, Copy, Eye } from "lucide-react";
 import { MAX_LYRICS_CHARS_PER_PAGE, PRESENTATION_FONT_PX, paginateLyrics } from "@/lib/presentation-slides";
+import { loadLivePresentation } from "@/lib/live-presentation";
+import { createSnapshotSaveQueue } from "@/lib/snapshot-save-queue";
+import { presentationLeaveReason } from "@/lib/presentation-draft";
+import { protectPendingSave } from "@/lib/presentation-save";
+import { getBuilderCommand } from "@/lib/builder-shortcuts";
+import { duplicateSlideSelection } from "@/lib/slide-selection";
+import { deleteSlidesWithUndo, canUndoSlideDeletion, undoSlideDeletion } from "@/lib/slide-deletion";
 import SlideEditor from "../components/SlideEditor";
 import SlidePreview from "../components/SlidePreview";
 import ContentPickerModal from "../components/presentation/ContentPickerModal";
@@ -11,32 +18,76 @@ import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
 export default function PresentationBuilder() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const navigation = /** @type {{ registerLeaveGuard: (check: () => string, onBlocked: (reason: string) => void) => () => void } | null} */ (useOutletContext());
   const [presentation, setPresentation] = useState(null);
   const [selectedSlide, setSelectedSlide] = useState(0);
+  const [deletionUndo, setDeletionUndo] = useState(null);
   const [selectedSlides, setSelectedSlides] = useState(new Set([0])); // multi-select set
   const [lastClickedIndex, setLastClickedIndex] = useState(0);
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState('');
+  const [savedSnapshot, setSavedSnapshot] = useState('');
+  const saveQueue = useRef(null);
+  const dirty = Boolean(presentation) && JSON.stringify(presentation) !== savedSnapshot;
+  const dirtyRef = useRef(false);
+  useLayoutEffect(() => { dirtyRef.current = dirty; }, [dirty]);
+  useEffect(() => {
+    const protect = event => protectPendingSave(event, dirtyRef.current || Boolean(saveQueue.current?.queue.hasUnconfirmedWork()));
+    window.addEventListener('beforeunload', protect);
+    return () => window.removeEventListener('beforeunload', protect);
+  }, []);
+  useEffect(() => {
+    const queue = createSnapshotSaveQueue({
+      write: snapshot => Presentation.update(id, snapshot),
+      onSaved: snapshot => setSavedSnapshot(JSON.stringify(snapshot)),
+      onState: phase => {
+        setSaving(phase === 'saving');
+        setSaveError(phase === 'paused' ? 'Save could not be confirmed. Your latest edits are retained here; autosave is paused. Check the library, then use Save explicitly when ready.' : '');
+      },
+    });
+    saveQueue.current = { id, queue };
+    setSaving(false); setSaveError('');
+    return () => { queue.dispose(); if (saveQueue.current?.queue === queue) saveQueue.current = null; };
+  }, [id]);
+  useEffect(() => navigation?.registerLeaveGuard(() => {
+    const phase = saveQueue.current?.queue.status();
+    return presentationLeaveReason({ saving: phase === 'saving', uncertain: phase === 'paused', dirty: dirtyRef.current });
+  }, setSaveError), [navigation]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
+  const [loadAttempt, setLoadAttempt] = useState(0);
   const [picker, setPicker] = useState(null);
   const [draggingIndex, setDraggingIndex] = useState(null);
 
-  useEffect(() => { loadPresentation(); }, [id]);
+  useEffect(() => {
+    setLoadError(''); setDeletionUndo(null);
+    if (!id) { setPresentation(null); setLoading(false); setLoadError('No presentation was selected.'); return; }
+    return loadLivePresentation(id, selectedId => Presentation.filter({ id: selectedId }), state => {
+      setLoading(state.status === 'loading');
+      if (state.status === 'loading' || state.status === 'error') setPresentation(null);
+      if (state.status === 'error') setLoadError(state.error);
+      if (state.status === 'ready') {
+        setPresentation(state.presentation);
+        setSavedSnapshot(JSON.stringify(state.presentation));
+        setSelectedSlide(0); setSelectedSlides(new Set([0])); setLastClickedIndex(0);
+      }
+    });
+  }, [id, loadAttempt]);
 
-  async function loadPresentation() {
-    setLoading(true);
-    const data = await Presentation.filter({ id });
-    if (data?.[0]) setPresentation(data[0]);
-    setLoading(false);
+  function save(updated, explicit = false) {
+    const snapshot = updated || presentation;
+    if (!snapshot || String(snapshot.id) !== String(id) || saveQueue.current?.id !== id) {
+      setSaveError('The selected presentation is not ready to save.'); return;
+    }
+    try { saveQueue.current.queue.request(snapshot, { explicit }); }
+    catch { setSaveError('This draft could not be prepared for saving. Your edits are retained.'); }
   }
 
-  async function save(updated) {
-    setSaving(true);
-    try {
-      await Presentation.update(id, updated || presentation);
-    } catch (err) {
-      console.error("Save failed:", err);
-    }
-    setSaving(false);
+  function navigateFromBuilder(path) {
+    const phase = saveQueue.current?.queue.status();
+    const reason = presentationLeaveReason({ saving: phase === 'saving', uncertain: phase === 'paused', dirty: dirtyRef.current });
+    if (reason) { setSaveError(reason); return; }
+    navigate(path);
   }
 
   function updateField(field, value) {
@@ -139,29 +190,38 @@ export default function PresentationBuilder() {
   }
 
   // ── Single slide ops ─────────────────────────────────────────────────────
-  function deleteSlide(index) {
-    const slides = [...(presentation.slides || [])];
-    slides.splice(index, 1);
-    const updated = { ...presentation, slides };
-    setPresentation(updated);
-    const newIdx = Math.max(0, index - 1);
-    setSelectedSlide(newIdx);
-    setSelectedSlides(new Set([newIdx]));
-    setLastClickedIndex(newIdx);
-    save(updated);
+  function deleteIndices(indices) {
+    try {
+      const result = deleteSlidesWithUndo(presentation, indices);
+      setPresentation(result.document); setDeletionUndo(result.checkpoint);
+      setSelectedSlide(result.selectedIndex); setSelectedSlides(new Set([result.selectedIndex])); setLastClickedIndex(result.selectedIndex);
+      save(result.document);
+    } catch (error) { setSaveError(error.message); }
   }
 
-  function duplicateSlide(index) {
-    const slides = [...(presentation.slides || [])];
-    const clone = { ...slides[index], id: `${Date.now()}-copy-${Math.random()}` };
-    slides.splice(index + 1, 0, clone);
-    const updated = { ...presentation, slides };
-    setPresentation(updated);
-    setSelectedSlide(index + 1);
-    setSelectedSlides(new Set([index + 1]));
-    setLastClickedIndex(index + 1);
-    save(updated);
+  function deleteSlide(index) { deleteIndices([index]); }
+
+  function undoDeletion() {
+    try {
+      const restored = undoSlideDeletion(presentation, deletionUndo);
+      setPresentation(restored); setDeletionUndo(null);
+      setSelectedSlide(0); setSelectedSlides(new Set([0])); setLastClickedIndex(0);
+      save(restored);
+    } catch (error) { setSaveError(error.message); }
   }
+
+  function duplicateIndices(indices) {
+    try {
+      const result = duplicateSlideSelection(presentation.slides || [], indices);
+      const updated = { ...presentation, slides: result.slides };
+      setPresentation(updated);
+      setSelectedSlides(new Set(result.selectedIndices));
+      setSelectedSlide(result.selectedIndices[0]); setLastClickedIndex(result.selectedIndices[0]);
+      save(updated);
+    } catch (error) { setSaveError(error.message); }
+  }
+
+  function duplicateSlide(index) { duplicateIndices([index]); }
 
   function moveSlide(index, dir) {
     const slides = [...(presentation.slides || [])];
@@ -177,41 +237,9 @@ export default function PresentationBuilder() {
   }
 
   // ── Multi-slide ops ──────────────────────────────────────────────────────
-  function deleteSelectedSlides() {
-    const indices = [...selectedSlides].sort((a, b) => b - a); // delete high→low
-    const slides = [...(presentation.slides || [])];
-    indices.forEach(i => slides.splice(i, 1));
-    const updated = { ...presentation, slides };
-    setPresentation(updated);
-    const newIdx = Math.max(0, Math.min(...selectedSlides) - 1);
-    setSelectedSlide(newIdx);
-    setSelectedSlides(new Set([newIdx]));
-    setLastClickedIndex(newIdx);
-    save(updated);
-  }
+  function deleteSelectedSlides() { deleteIndices([...selectedSlides]); }
 
-  function duplicateSelectedSlides() {
-    const sorted = [...selectedSlides].sort((a, b) => a - b);
-    const slides = [...(presentation.slides || [])];
-    let offset = 0;
-    const newIndices = [];
-    sorted.forEach(i => {
-      const insertAt = i + 1 + offset;
-      const clone = { ...slides[i + offset - (offset > 0 ? 0 : 0)], id: `${Date.now()}-copy-${Math.random()}` };
-      // re-read from current slides array at adjusted index
-      const sourceSlide = slides[i + offset];
-      const cloneFixed = { ...sourceSlide, id: `${Date.now()}-copy-${Math.random()}` };
-      slides.splice(insertAt, 0, cloneFixed);
-      newIndices.push(insertAt);
-      offset++;
-    });
-    const updated = { ...presentation, slides };
-    setPresentation(updated);
-    setSelectedSlides(new Set(newIndices));
-    setSelectedSlide(newIndices[0]);
-    setLastClickedIndex(newIndices[0]);
-    save(updated);
-  }
+  function duplicateSelectedSlides() { duplicateIndices([...selectedSlides]); }
 
   function moveSelectedSlides(dir) {
     const sorted = [...selectedSlides].sort((a, b) => a - b);
@@ -292,30 +320,18 @@ export default function PresentationBuilder() {
   // ── Keyboard shortcuts ───────────────────────────────────────────────────
   useEffect(() => {
     function onKey(e) {
-      if (!presentation) return;
-      const tag = document.activeElement?.tagName;
-      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
-
-      if ((e.metaKey || e.ctrlKey) && e.key === "d") {
-        e.preventDefault();
-        selectedSlides.size > 1 ? duplicateSelectedSlides() : duplicateSlide(selectedSlide);
-      }
-      if (e.key === "Delete" || e.key === "Backspace") {
-        e.preventDefault();
-        selectedSlides.size > 1 ? deleteSelectedSlides() : deleteSlide(selectedSlide);
-      }
-      if (e.key === "ArrowUp" && (e.metaKey || e.ctrlKey)) {
-        e.preventDefault();
-        moveSelectedSlides(-1);
-      }
-      if (e.key === "ArrowDown" && (e.metaKey || e.ctrlKey)) {
-        e.preventDefault();
-        moveSelectedSlides(1);
-      }
+      if (!presentation || picker || String(presentation.id) !== String(id)) return;
+      const command = getBuilderCommand(e);
+      if (!command) return;
+      e.preventDefault();
+      if (command === 'duplicate') selectedSlides.size > 1 ? duplicateSelectedSlides() : duplicateSlide(selectedSlide);
+      if (command === 'delete') selectedSlides.size > 1 ? deleteSelectedSlides() : deleteSlide(selectedSlide);
+      if (command === 'move-up') moveSelectedSlides(-1);
+      if (command === 'move-down') moveSelectedSlides(1);
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [presentation, selectedSlide, selectedSlides]);
+  }, [presentation, selectedSlide, selectedSlides, picker, id]);
 
   function handlePickerAdd(items) {
     const currentSlide = (presentation.slides || [])[selectedSlide];
@@ -402,7 +418,12 @@ export default function PresentationBuilder() {
     setPicker(null);
   }
 
-  if (loading) return <div className="flex items-center justify-center h-full"><div className="w-8 h-8 border-4 border-primary/30 border-t-primary rounded-full animate-spin" /></div>;
+  if (loadError) return <div className="p-6 space-y-3">
+    <p role="alert">{loadError} Editing is unavailable until the presentation loads.</p>
+    <button onClick={() => setLoadAttempt(value => value + 1)} className="rounded border px-3 py-2">Retry loading</button>
+    <button onClick={() => navigate('/presentations')} className="rounded border px-3 py-2">Back to presentations</button>
+  </div>;
+  if (loading || (presentation && String(presentation.id) !== String(id))) return <div className="flex items-center justify-center h-full"><div className="w-8 h-8 border-4 border-primary/30 border-t-primary rounded-full animate-spin" /></div>;
   if (!presentation) return <div className="p-6 text-muted-foreground">Presentation not found</div>;
 
   const currentSlide = (presentation.slides || [])[selectedSlide];
@@ -410,9 +431,15 @@ export default function PresentationBuilder() {
 
   return (
     <div className="flex flex-col h-full">
+      {saveError && <p role="alert" className="border border-red-400 p-3 text-red-600">{saveError}</p>}
+      {!saving && dirty && <p role="status" className="px-4 py-2 text-sm">Unsaved presentation changes</p>}
+      {deletionUndo && <div className="px-4 py-2 flex items-center gap-3 text-sm">
+        <button onClick={undoDeletion} disabled={!canUndoSlideDeletion(presentation, deletionUndo)} className="rounded border px-3 py-1 disabled:opacity-50">Undo last slide deletion</button>
+        <span>{canUndoSlideDeletion(presentation, deletionUndo) ? 'One-step recovery in this editor session.' : 'Later edits prevent undo without overwriting changes.'}</span>
+      </div>}
       {/* Top Bar */}
       <div className="flex items-center gap-3 px-4 py-3 border-b border-border bg-card">
-        <button onClick={() => navigate("/presentations")} className="p-1.5 rounded-md hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors">
+        <button onClick={() => navigateFromBuilder("/presentations")} className="p-1.5 rounded-md hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors">
           <ArrowLeft className="w-4 h-4" />
         </button>
         <input
@@ -426,11 +453,11 @@ export default function PresentationBuilder() {
           <option value="ready">Ready</option>
           <option value="archived">Archived</option>
         </select>
-        <button onClick={() => save()} disabled={saving}
+        <button onClick={() => save(undefined, true)} disabled={saving}
           className="flex items-center gap-1.5 px-3 py-1.5 bg-secondary text-secondary-foreground rounded-md text-sm hover:bg-secondary/80 transition-colors">
           <Save className="w-4 h-4" /> {saving ? "Saving..." : "Save"}
         </button>
-        <button onClick={() => navigate(`/live?presentation=${id}`)}
+        <button onClick={() => navigateFromBuilder(`/live?presentation=${id}`)}
           className="flex items-center gap-1.5 px-3 py-1.5 bg-primary text-primary-foreground rounded-md text-sm font-semibold hover:bg-primary/90 transition-colors">
           <Radio className="w-4 h-4" /> Go Live
         </button>
@@ -602,7 +629,7 @@ export default function PresentationBuilder() {
                 slide={currentSlide}
                 onChange={data => setPresentation(p => { const slides = [...(p.slides || [])]; slides[selectedSlide] = data; return { ...p, slides }; })}
                 onImportScripture={importScriptureSlides}
-                onSave={() => save()}
+                onSave={() => save(undefined, true)}
               />
             </div>
           )}

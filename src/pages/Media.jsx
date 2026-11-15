@@ -165,7 +165,7 @@ export default function Media() {
                   src={asset.file_url}
                   alt={asset.name}
                   className="w-full h-full object-cover"
-                  onError={(e) => { e.target.style.display = "none"; }}
+                  onError={(e) => { e.currentTarget.style.display = "none"; }}
                 />
                 <button
                   onClick={() => handleDelete(asset.id)}

@@ -1,6 +1,9 @@
 export const PRESENTATION_FONT_PX = 30;
 export const MAX_LYRICS_CHARS_PER_PAGE = 180;
 
+// Count Unicode code points so pagination never cuts a surrogate pair in half.
+const textLength = text => Array.from(text).length;
+
 function normalizeBlock(text) {
   return text.replace(/\r/g, "").trim();
 }
@@ -12,24 +15,24 @@ function splitLongLine(line, maxChars) {
 
   for (const word of words) {
     const next = current ? `${current} ${word}` : word;
-    if (next.length <= maxChars) {
+    if (textLength(next) <= maxChars) {
       current = next;
       continue;
     }
 
     if (current) chunks.push(current);
 
-    if (word.length <= maxChars) {
+    if (textLength(word) <= maxChars) {
       current = word;
       continue;
     }
 
-    let remaining = word;
+    let remaining = Array.from(word);
     while (remaining.length > maxChars) {
-      chunks.push(remaining.slice(0, maxChars));
+      chunks.push(remaining.slice(0, maxChars).join(""));
       remaining = remaining.slice(maxChars);
     }
-    current = remaining;
+    current = remaining.join("");
   }
 
   if (current) chunks.push(current);
@@ -37,6 +40,8 @@ function splitLongLine(line, maxChars) {
 }
 
 export function paginateLyrics(content, maxChars = MAX_LYRICS_CHARS_PER_PAGE) {
+  if (typeof content !== "string") throw new TypeError("Lyrics must be text.");
+  if (!Number.isSafeInteger(maxChars) || maxChars < 1) throw new RangeError("Page size must be a positive whole number.");
   const lines = normalizeBlock(content).split("\n");
   const pages = [];
   let currentPage = [];
@@ -50,12 +55,12 @@ export function paginateLyrics(content, maxChars = MAX_LYRICS_CHARS_PER_PAGE) {
   }
 
   function addLine(line) {
-    const extraLength = (currentPage.length ? 1 : 0) + line.length;
+    const extraLength = (currentPage.length ? 1 : 0) + textLength(line);
     if (currentLength + extraLength > maxChars) {
       flushPage();
     }
     currentPage.push(line);
-    currentLength += (currentPage.length > 1 ? 1 : 0) + line.length;
+    currentLength += (currentPage.length > 1 ? 1 : 0) + textLength(line);
   }
 
   for (const rawLine of lines) {
@@ -68,7 +73,7 @@ export function paginateLyrics(content, maxChars = MAX_LYRICS_CHARS_PER_PAGE) {
       continue;
     }
 
-    if (line.length <= maxChars) {
+    if (textLength(line) <= maxChars) {
       addLine(line);
       continue;
     }
