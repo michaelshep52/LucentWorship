@@ -93,3 +93,10 @@ test('active builder single and multi move paths validate selections before save
   assert.match(builder,/function moveSlide\(index, dir\) \{ moveIndices\(\[index\], dir, index\); \}/);
   assert.match(builder,/function moveSelectedSlides\(dir\) \{ moveIndices\(\[...selectedSlides\], dir, selectedSlide\); \}/);
 });
+test('actual drag handlers snapshot the document and validate drops before saving',()=>{
+ const builder=source('pages/PresentationBuilder.jsx');
+ assert.match(builder,/beginSlideDrag\(presentation, \[...selectedSlides\], start.source.index, start.draggableId\)/);
+ assert.match(builder,/finishSlideDrag\(presentation, snapshot, result.source.index, result.destination.index, result.draggableId\)/);
+ assert.match(builder,/if \(!result.destination \|\| result.reason === 'CANCEL'\) return;/);
+ assert.match(builder,/if \(!moved.changed\) return;/);
+});

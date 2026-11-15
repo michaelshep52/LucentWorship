@@ -7,6 +7,7 @@ import { loadLivePresentation } from "@/lib/live-presentation";
 import { createSnapshotSaveQueue } from "@/lib/snapshot-save-queue";
 import { presentationLeaveReason } from "@/lib/presentation-draft";
 import { protectPendingSave } from "@/lib/presentation-save";
+import { beginSlideDrag, finishSlideDrag } from "@/lib/slide-drag";
 import { getBuilderCommand } from "@/lib/builder-shortcuts";
 import { duplicateSlideSelection, moveSlideSelection } from "@/lib/slide-selection";
 import { deleteSlidesWithUndo, canUndoSlideDeletion, undoSlideDeletion } from "@/lib/slide-deletion";
@@ -58,6 +59,7 @@ export default function PresentationBuilder() {
   const [loadAttempt, setLoadAttempt] = useState(0);
   const [picker, setPicker] = useState(null);
   const [draggingIndex, setDraggingIndex] = useState(null);
+  const dragSnapshot = useRef(null);
 
   useEffect(() => {
     setLoadError(''); setDeletionUndo(null);
@@ -244,50 +246,29 @@ export default function PresentationBuilder() {
 
   // ── Drag and drop ────────────────────────────────────────────────────────
   function handleDragStart(start) {
-    setDraggingIndex(start.source.index);
+    dragSnapshot.current = null;
+    try {
+      if (!presentation || String(presentation.id) !== String(id)) throw new Error('The presentation is not ready to reorder.');
+      dragSnapshot.current = beginSlideDrag(presentation, [...selectedSlides], start.source.index, start.draggableId);
+      setDraggingIndex(start.source.index);
+    } catch (error) { setSaveError(error.message); }
   }
 
   function handleDragEnd(result) {
     setDraggingIndex(null);
-    if (!result.destination) return;
-    const from = result.source.index;
-    const to   = result.destination.index;
-    if (from === to) return;
-
-    const slides = [...(presentation.slides || [])];
-
-    if (selectedSlides.has(from) && selectedSlides.size > 1) {
-      // Multi-drag: keep selected slides in their RELATIVE order, insert as a block at destination
-      const sorted = [...selectedSlides].sort((a, b) => a - b);
-      const moving = sorted.map(i => slides[i]);
-
-      // Build result array without the moving slides
-      const remaining = slides.filter((_, i) => !selectedSlides.has(i));
-
-      // Figure out where to insert: destination index in the ORIGINAL array,
-      // adjusted for how many selected slides were before it
-      const selectedBefore = sorted.filter(i => i < to).length;
-      const insertAt = Math.min(to - selectedBefore, remaining.length);
-
-      remaining.splice(insertAt, 0, ...moving);
-
-      const newSelected = new Set(moving.map((_, idx) => insertAt + idx));
-      const updated = { ...presentation, slides: remaining };
+    const snapshot = dragSnapshot.current;
+    dragSnapshot.current = null;
+    if (!result.destination || result.reason === 'CANCEL') return;
+    try {
+      if (!presentation || String(presentation.id) !== String(id)) throw new Error('The presentation changed. Start the drag again.');
+      const moved = finishSlideDrag(presentation, snapshot, result.source.index, result.destination.index, result.draggableId);
+      if (!moved.changed) return;
+      const updated = { ...presentation, slides: moved.slides };
       setPresentation(updated);
-      setSelectedSlides(newSelected);
-      setSelectedSlide(insertAt);
-      setLastClickedIndex(insertAt);
+      setSelectedSlides(new Set(moved.selectedIndices));
+      setSelectedSlide(moved.focusedIndex); setLastClickedIndex(moved.focusedIndex);
       save(updated);
-    } else {
-      const [moved] = slides.splice(from, 1);
-      slides.splice(to, 0, moved);
-      const updated = { ...presentation, slides };
-      setPresentation(updated);
-      setSelectedSlide(to);
-      setSelectedSlides(new Set([to]));
-      setLastClickedIndex(to);
-      save(updated);
-    }
+    } catch (error) { setSaveError(error.message); }
   }
 
   // ── Keyboard shortcuts ───────────────────────────────────────────────────
