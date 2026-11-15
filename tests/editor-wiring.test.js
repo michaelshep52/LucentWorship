@@ -86,3 +86,10 @@ test('active builder single/multi deletion and explicit undo use snapshot recove
   assert.match(builder,/undoSlideDeletion\(presentation, deletionUndo\)/);
   assert.match(builder,/disabled=\{!canUndoSlideDeletion\(presentation, deletionUndo\)\}/);
 });
+test('active builder single and multi move paths validate selections before save',()=>{
+  const builder=source('pages/PresentationBuilder.jsx');
+  assert.match(builder,/moveSlideSelection\(presentation.slides \|\| \[\], indices, dir, focus\)/);
+  assert.match(builder,/if \(!result.changed\) return;/);
+  assert.match(builder,/function moveSlide\(index, dir\) \{ moveIndices\(\[index\], dir, index\); \}/);
+  assert.match(builder,/function moveSelectedSlides\(dir\) \{ moveIndices\(\[...selectedSlides\], dir, selectedSlide\); \}/);
+});

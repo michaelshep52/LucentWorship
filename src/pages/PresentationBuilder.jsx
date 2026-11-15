@@ -8,7 +8,7 @@ import { createSnapshotSaveQueue } from "@/lib/snapshot-save-queue";
 import { presentationLeaveReason } from "@/lib/presentation-draft";
 import { protectPendingSave } from "@/lib/presentation-save";
 import { getBuilderCommand } from "@/lib/builder-shortcuts";
-import { duplicateSlideSelection } from "@/lib/slide-selection";
+import { duplicateSlideSelection, moveSlideSelection } from "@/lib/slide-selection";
 import { deleteSlidesWithUndo, canUndoSlideDeletion, undoSlideDeletion } from "@/lib/slide-deletion";
 import SlideEditor from "../components/SlideEditor";
 import SlidePreview from "../components/SlidePreview";
@@ -223,51 +223,24 @@ export default function PresentationBuilder() {
 
   function duplicateSlide(index) { duplicateIndices([index]); }
 
-  function moveSlide(index, dir) {
-    const slides = [...(presentation.slides || [])];
-    const newIdx = index + dir;
-    if (newIdx < 0 || newIdx >= slides.length) return;
-    [slides[index], slides[newIdx]] = [slides[newIdx], slides[index]];
-    const updated = { ...presentation, slides };
-    setPresentation(updated);
-    setSelectedSlide(newIdx);
-    setSelectedSlides(new Set([newIdx]));
-    setLastClickedIndex(newIdx);
-    save(updated);
+  function moveIndices(indices, dir, focus) {
+    try {
+      const result = moveSlideSelection(presentation.slides || [], indices, dir, focus);
+      if (!result.changed) return;
+      const updated = { ...presentation, slides: result.slides };
+      setPresentation(updated);
+      setSelectedSlides(new Set(result.selectedIndices));
+      setSelectedSlide(result.focusedIndex); setLastClickedIndex(result.focusedIndex);
+      save(updated);
+    } catch (error) { setSaveError(error.message); }
   }
 
-  // ── Multi-slide ops ──────────────────────────────────────────────────────
+  function moveSlide(index, dir) { moveIndices([index], dir, index); }
+
+  // Single and multi actions share the same validation and snapshot save queue.
   function deleteSelectedSlides() { deleteIndices([...selectedSlides]); }
-
   function duplicateSelectedSlides() { duplicateIndices([...selectedSlides]); }
-
-  function moveSelectedSlides(dir) {
-    const sorted = [...selectedSlides].sort((a, b) => a - b);
-    const slides = [...(presentation.slides || [])];
-    if (dir === -1 && sorted[0] === 0) return;
-    if (dir === 1 && sorted[sorted.length - 1] === slides.length - 1) return;
-
-    const selSet = new Set(sorted);
-    // Build new array by moving selected slides
-    const result = [...slides];
-    if (dir === -1) {
-      for (const i of sorted) {
-        [result[i - 1], result[i]] = [result[i], result[i - 1]];
-      }
-    } else {
-      for (const i of [...sorted].reverse()) {
-        [result[i + 1], result[i]] = [result[i], result[i + 1]];
-      }
-    }
-    const newSelected = new Set(sorted.map(i => i + dir));
-    const updated = { ...presentation, slides: result };
-    setPresentation(updated);
-    setSelectedSlides(newSelected);
-    const newFocus = selectedSlide + dir;
-    setSelectedSlide(newFocus);
-    setLastClickedIndex(newFocus);
-    save(updated);
-  }
+  function moveSelectedSlides(dir) { moveIndices([...selectedSlides], dir, selectedSlide); }
 
   // ── Drag and drop ────────────────────────────────────────────────────────
   function handleDragStart(start) {
