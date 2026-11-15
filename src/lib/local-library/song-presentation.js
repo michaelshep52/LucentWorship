@@ -41,3 +41,9 @@ export function rehearsalTransition(state, command, count) {
   if (command === 'unblank') return { index, blank: false };
   return { index, blank: Boolean(state.blank) };
 }
+
+/** Cue a specific lyric page without implicitly revealing blanked output. */
+export function jumpRehearsalSlide(state, index, count) {
+  if (!Number.isInteger(count) || count < 1 || !Number.isInteger(index) || index < 0 || index >= count) throw new Error('That rehearsal slide is no longer available.');
+  return { index, blank: Boolean(state.blank) };
+}

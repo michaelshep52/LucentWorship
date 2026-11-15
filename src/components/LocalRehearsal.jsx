@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState, useRef, useLayoutEffect } from 'react';
 import { audienceMessage, isAudienceControl, requestAudienceWindow } from '../lib/audience-protocol';
 import { getLiveCommand } from '../lib/live-controls';
-import { rehearsalTransition } from '../lib/local-library/song-presentation';
+import { rehearsalTransition, jumpRehearsalSlide } from '../lib/local-library/song-presentation';
 
 export default function LocalRehearsal({ rehearsal, onClose }) {
   const slideRef = useRef(null);
@@ -24,6 +24,12 @@ export default function LocalRehearsal({ rehearsal, onClose }) {
     window.addEventListener('keydown', handle);
     return () => window.removeEventListener('keydown', handle);
   }, [advance]);
+  function jumpToSlide(event) {
+    const index = Number(event.target.value);
+    if (!Number.isInteger(index) || index < 0 || index >= rehearsal.slides.length) return;
+    setState(previous => jumpRehearsalSlide(previous, index, rehearsal.slides.length));
+    slideRef.current?.focus();
+  }
   const slide = rehearsal.slides[state.index];
   useLayoutEffect(() => { snapshotRef.current = { content: slide?.content || '', blank: state.blank || !slide }; }, [slide, state.blank]);
   useEffect(() => {
@@ -69,11 +75,17 @@ export default function LocalRehearsal({ rehearsal, onClose }) {
     </div>
     <p role="status" className="text-center text-amber-200">{audienceStatus} Move the audience window to the projector. This preview is not hardware-verified; stale updates are designed to blank output at a 10-second threshold (browser timers can be delayed).</p>
     <p role="status" className="text-center text-slate-300">{state.index + 1} / {rehearsal.slides.length} • {slide?.section_label}{state.blank ? ' • blanked' : ''}</p>
+    <label className="flex justify-center items-center gap-3 flex-wrap">
+      <span>Jump to lyric page</span>
+      <select aria-label="Jump to lyric page" value={state.index} onChange={jumpToSlide} className="max-w-full rounded border border-slate-600 bg-slate-900 px-3 py-2">
+        {rehearsal.slides.map((item, index) => <option key={item.id} value={index}>{index + 1}. {item.section_label} • page {item.source_page}</option>)}
+      </select>
+    </label>
     <div className="flex justify-center gap-3 flex-wrap">
       <button onClick={() => advance('previous')} disabled={state.index === 0} className="rounded border px-4 py-2 disabled:opacity-40">Previous</button>
       <button onClick={() => advance('blank')} className="rounded border px-4 py-2">{state.blank ? 'Show slide' : 'Blank'}</button>
       <button onClick={() => advance('next')} disabled={state.index >= rehearsal.slides.length - 1} className="rounded border px-4 py-2 disabled:opacity-40">Next</button>
     </div>
-    <p className="text-center text-sm text-slate-400">Click the slide to focus keyboard controls: arrow keys or Space navigate without changing blanking, B toggles blanking, Escape shows the slide. Draft changes are retained when you return.</p>
+    <p className="text-center text-sm text-slate-400">Click the slide to focus keyboard controls: arrow keys or Space navigate without changing blanking, B toggles blanking, Escape shows the slide. Jump directly to any lyric page without changing blanking. Draft changes are retained when you return.</p>
   </main>;
 }
