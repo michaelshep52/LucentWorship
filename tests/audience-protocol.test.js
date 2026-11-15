@@ -124,3 +124,21 @@ test('blanked navigation stays black across the rehearsal-to-audience message pa
   const visible=receiveAudienceState(received,audienceMessage(session,2,{content:'Next private cue',blank:shown.blank}),session,1);
   assert.equal(visible.content,'Next private cue');
 });
+
+test('timer checks fail black on invalid or reversed clocks, not only elapsed timeout',()=>{
+  const live=receiveAudienceState(emptyAudienceState(),message(1),session,100);
+  for(const now of [NaN,Infinity,-Infinity,99]) {
+    const expired=expireAudienceState(live,now);
+    assert.equal(expired.blank,true); assert.equal(expired.content,'');
+  }
+  assert.equal(expireAudienceState(live,101),live);
+});
+test('transport failure suspension rejects queued state until fresh challenge response',()=>{
+  const live=receiveAudienceState(emptyAudienceState(),message(1),session,100);
+  const failed=suspendAudienceState(live,'transport-recovery');
+  assert.equal(receiveFreshAudienceState(failed,message(2),session,101,()=>assert.fail()),failed);
+  const recovered=receiveFreshAudienceState(failed,{...message(3,'Recovered'),replyTo:'transport-recovery'},session,102,()=>assert.fail());
+  assert.equal(recovered.content,'Recovered');
+  const source=readFileSync(new URL('../src/pages/LocalAudience.jsx',import.meta.url),'utf8');
+  assert.match(source,/catch \{ current = suspendAudienceState\(current, crypto.randomUUID\(\)\); setDisplay\(current\); \}/);
+});

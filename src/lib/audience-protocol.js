@@ -25,7 +25,7 @@ export function receiveFreshAudienceState(previous, message, session, now, creat
   return receiveAudienceState(ready, message, session, now);
 }
 export function expireAudienceState(previous, now) {
-  if (previous.lastReceived === null || now - previous.lastReceived >= AUDIENCE_TIMEOUT_MS) return { ...previous, blank: true, content: '' };
+  if (previous.lastReceived === null || !Number.isFinite(now) || now < previous.lastReceived || now - previous.lastReceived >= AUDIENCE_TIMEOUT_MS) return { ...previous, blank: true, content: '' };
   return previous;
 }
 export function isAudienceControl(message, session, latestSequence) {

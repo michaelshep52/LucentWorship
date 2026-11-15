@@ -10,7 +10,7 @@ export default function LocalAudience() {
     let channel;
     try { channel = new BroadcastChannel(`lucent-audience-${session}`); } catch { return; }
     let current = suspendAudienceState(emptyAudienceState(), crypto.randomUUID());
-    const send = message => { try { channel.postMessage(message); } catch { current = { ...current, blank: true, content: '' }; setDisplay(current); } };
+    const send = message => { try { channel.postMessage(message); } catch { current = suspendAudienceState(current, crypto.randomUUID()); setDisplay(current); } };
     const requestFresh = () => { if (!current.stopped && !document.hidden) send({ version: 1, session, type: 'request', requestId: current.awaitingToken || undefined }); };
     const suspend = () => { current = suspendAudienceState(current, crypto.randomUUID()); setDisplay(current); };
     const resume = () => { suspend(); requestFresh(); };
