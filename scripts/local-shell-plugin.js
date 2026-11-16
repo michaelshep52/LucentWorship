@@ -5,6 +5,7 @@ export function localShellPlugin() {
   return {
     name: 'lucent-local-shell',
     apply: 'build',
+    enforce: 'post',
     generateBundle(_options, bundle) {
       const chunks = Object.values(bundle).filter(item => item.type === 'chunk');
       const entry = chunks.find(item => item.isEntry);
@@ -24,7 +25,15 @@ export function localShellPlugin() {
       }
       [entry, ...roots].forEach(visit);
       const paths = [...files].sort().map(file => '/' + file);
-      const digest = createHash('sha256').update(paths.join('\n')).digest('hex').slice(0, 20);
+      // Version the complete shell and worker policy, not just hashed asset names.
+      // Otherwise an HTML-only update can reuse/overwrite the active cache.
+      const hash = createHash('sha256').update(localShellWorker(paths, 'VERSION'));
+      for (const file of [...files].sort()) {
+        const asset = bundle[file];
+        if (!asset) throw new Error('Missing offline shell asset: ' + file);
+        hash.update(file).update('\0').update(asset.type === 'chunk' ? asset.code : asset.source);
+      }
+      const digest = hash.digest('hex').slice(0, 20);
       this.emitFile({ type: 'asset', fileName: 'lucent-local-sw.js', source: localShellWorker(paths, digest) });
     },
   };

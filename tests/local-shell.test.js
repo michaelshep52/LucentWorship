@@ -4,8 +4,10 @@ import vm from 'node:vm';
 import { localShellPlugin, localShellWorker } from '../scripts/local-shell-plugin.js';
 
 test('offline build follows only static entry and explicit local route graphs', () => {
-  const chunk = (fileName, extras = {}) => ({type:'chunk',fileName,imports:[],...extras});
+  const chunk = (fileName, extras = {}) => ({type:'chunk',fileName,code:'synthetic code',imports:[],...extras});
   const bundle = {
+    'index.html':{type:'asset',source:'<html>first</html>'},
+    'style.css':{type:'asset',source:'body{color:white}'},
     'entry.js':chunk('entry.js',{isEntry:true,imports:['react.js'],dynamicImports:['cloud.js','local.js','audience.js'],viteMetadata:{importedCss:new Set(['style.css'])}}),
     'react.js':chunk('react.js'),
     'local.js':chunk('local.js',{facadeModuleId:'/src/pages/LocalLibrary.jsx',imports:['repo.js']}),
@@ -17,6 +19,12 @@ test('offline build follows only static entry and explicit local route graphs', 
   assert.equal(output.fileName,'lucent-local-sw.js');
   assert.ok(output.source.includes('/repo.js')); assert.ok(output.source.includes('/style.css'));
   assert.ok(!output.source.includes('cloud.js'));
+  const firstSource=output.source;
+  bundle['index.html'].source='<html>second</html>';
+  localShellPlugin().generateBundle.call({emitFile(value){output=value;}}, {}, bundle);
+  assert.notEqual(output.source.split('\n')[0],firstSource.split('\n')[0], 'HTML-only edits must create a distinct cache');
+  delete bundle['style.css'];
+  assert.throws(() => localShellPlugin().generateBundle.call({emitFile(){}},{},bundle),/Missing offline shell asset/);
   delete bundle['audience.js'];
   assert.throws(() => localShellPlugin().generateBundle.call({emitFile(){}},{},bundle),/incomplete/);
 });
