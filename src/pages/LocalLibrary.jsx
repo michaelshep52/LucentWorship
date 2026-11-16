@@ -1,9 +1,10 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useMemo } from 'react';
 import { createLocalLibrary, inspectLocalLibraryBackup } from '../lib/local-library/repository';
 import { openLocalLibraryDatabase } from '../lib/local-library/indexeddb';
 import { songEditorDraft, songDocumentFromDraft, newSongDocumentFromDraft, editorNavigationBlock } from '../lib/local-library/song-editor';
 
 import { buildSongRehearsal, parseSectionOrder } from '../lib/local-library/song-presentation';
+import { filterLocalSongs } from '../lib/local-library/song-search';
 import LocalRehearsal from '../components/LocalRehearsal';
 
 const buttonStyle = 'rounded border border-slate-500 px-3 py-2 disabled:opacity-40';
@@ -12,6 +13,9 @@ const inputStyle = 'w-full rounded border border-slate-500 bg-slate-900 p-2 text
 export default function LocalLibrary() {
   const [library, setLibrary] = useState(null);
   const [songs, setSongs] = useState([]);
+  const [search, setSearch] = useState('');
+  const [songStatus, setSongStatus] = useState('all');
+  const visibleSongs = useMemo(() => filterLocalSongs(songs, search, songStatus), [songs, search, songStatus]);
   const [record, setRecord] = useState(null);
   const [draft, setDraft] = useState(() => songEditorDraft());
   const [rehearsal, setRehearsal] = useState(null);
@@ -139,7 +143,11 @@ export default function LocalLibrary() {
       </section>}
       <div className="grid md:grid-cols-[18rem_1fr] gap-6">
         <aside className="space-y-3"><h2 className="text-xl">Songs</h2>{!songs.length && <p className="text-slate-400">No local songs yet.</p>}
-          {songs.map(song => <div key={song.id} className="rounded border border-slate-700 p-3 space-y-2">
+          <label className="block">Search local songs<input className={inputStyle} type="search" maxLength={200} value={search} onChange={event => setSearch(event.target.value)} placeholder="Title, artist or lyric words" /></label>
+          <label className="block">Show<select className={inputStyle} value={songStatus} onChange={event => setSongStatus(event.target.value)}><option value="all">All songs</option><option value="active">Active songs</option><option value="archived">Archived songs</option></select></label>
+          <p role="status" className="text-sm text-slate-400">{visibleSongs.length} of {songs.length} songs shown</p>
+          {songs.length > 0 && !visibleSongs.length && <p>No matching songs. Change the search or archive filter.</p>}
+          {visibleSongs.map(song => <div key={song.id} className="rounded border border-slate-700 p-3 space-y-2">
             <p>{typeof song.document.title === 'string' ? song.document.title : 'Unsupported song'}{song.deleted ? ' (archived)' : ''}</p>
             {!song.deleted && <button className={buttonStyle} disabled={busy || dirty} onClick={() => choose(song)}>Edit</button>}{' '}
             <button className={buttonStyle} disabled={busy || dirty} onClick={() => archive(song, !song.deleted)}>{song.deleted ? 'Restore' : 'Archive'}</button>
