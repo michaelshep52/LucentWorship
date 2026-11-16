@@ -6,6 +6,7 @@ import { songEditorDraft, songDocumentFromDraft, newSongDocumentFromDraft, edito
 import { buildSongRehearsal, parseSectionOrder } from '../lib/local-library/song-presentation';
 import { filterLocalSongs } from '../lib/local-library/song-search';
 import LocalRehearsal from '../components/LocalRehearsal';
+import LocalOfflineSetup from '../components/LocalOfflineSetup';
 
 const buttonStyle = 'rounded border border-slate-500 px-3 py-2 disabled:opacity-40';
 const inputStyle = 'w-full rounded border border-slate-500 bg-slate-900 p-2 text-white';
@@ -124,7 +125,8 @@ export default function LocalLibrary() {
   return <main className="min-h-screen bg-slate-950 text-slate-100 p-5 md:p-8">
     <div className="mx-auto max-w-6xl space-y-5">
       <header><p className="text-sm text-amber-300">Local-first preview • separate from your existing cloud library</p><h1 className="text-3xl font-semibold">Lucent local song library</h1>
-        <p className="mt-2 text-slate-300">Draft songs and arrangements on this device without a cloud account. This preview does not yet provide offline app launch or media storage. Separate audience output is experimental and not projector-verified. Clearing browser/site data can remove this library; keep backups.</p>
+        <LocalOfflineSetup />
+        <p className="mt-2 text-slate-300">Draft songs and arrangements on this device without a cloud account. Use Prepare offline launch below to cache this local preview on this browser. Media storage is not included. Separate audience output is experimental and not projector-verified. Clearing browser/site data can remove this library; keep backups.</p>
         <a href="/" className="inline-block mt-2 underline" onClick={event => {
           const reason = editorNavigationBlock({ dirty, busy });
           if (reason) { event.preventDefault(); setError(reason); }
