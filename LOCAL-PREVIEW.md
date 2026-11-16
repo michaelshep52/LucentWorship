@@ -6,7 +6,7 @@ Using the existing development setup (`npm run dev`), open `/local-library` on t
 
 ## Included
 - Local song titles, writers and multiple labeled lyric sections.
-- Text-only rehearsal of the current draft with explicit section-number order (including repeated choruses), pagination, previous/next and blank/show controls. Draft state is retained on return; preview does not save or change arrangement metadata.
+- Text-only rehearsal of the current draft with explicit section-number order (including repeated choruses), pagination, previous/next and blank/show controls. Draft state is retained on return. Save on this device persists the local rehearsal order separately from imported arrangement metadata; preview itself does not save.
 - Metadata-preserving edits; unsupported song structures are refused, not silently rewritten.
 - Save/discard and navigation safeguards, explicit save-as-new-song conflict recovery, recoverable archive/restore, revision conflicts, and manual library refresh.
 - Document-only JSON backup downloads and inspection before restoring into an empty library. Media bytes and unsaved edits are excluded.

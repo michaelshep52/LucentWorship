@@ -15,7 +15,6 @@ export default function LocalLibrary() {
   const [record, setRecord] = useState(null);
   const [draft, setDraft] = useState(() => songEditorDraft());
   const [rehearsal, setRehearsal] = useState(null);
-  const [sectionOrder, setSectionOrder] = useState('');
   const [dirty, setDirty] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('Opening local storage…');
@@ -57,7 +56,7 @@ export default function LocalLibrary() {
   }
   function choose(next) {
     if (dirty) { setError('Save your changes or choose Discard changes before switching songs.'); return; }
-    try { setDraft(songEditorDraft(next)); setSectionOrder(''); setRecord(next); setError(''); }
+    try { setDraft(songEditorDraft(next)); setRecord(next); setError(''); }
     catch (reason) { setError(reason.message); }
   }
   function edit(field, value) { setDraft(previous => ({ ...previous, [field]: value })); setDirty(true); }
@@ -112,7 +111,7 @@ export default function LocalLibrary() {
   function previewRehearsal() {
     try {
       const document = songDocumentFromDraft(draft, record?.document);
-      setRehearsal(buildSongRehearsal(document, parseSectionOrder(sectionOrder, document.sections.length)));
+      setRehearsal(buildSongRehearsal(document, parseSectionOrder(draft.rehearsalOrder, document.sections.length)));
       setError('');
     } catch (reason) { setError(reason.message); }
   }
@@ -156,8 +155,8 @@ export default function LocalLibrary() {
               <label className="block">Lyrics<textarea className={inputStyle} rows={6} value={section.lyrics} onChange={event => editSection(index, 'lyrics', event.target.value)}/></label>
             </section>)}
             <label className="block">Rehearsal order (optional, e.g. 1,2,1,2)
-              <input className={inputStyle} value={sectionOrder} onChange={event => setSectionOrder(event.target.value)} placeholder="Blank uses sections in the order shown" />
-              <span className="block text-sm text-slate-400">Preview only. Uses these section numbers, not imported arrangement metadata. Repeated numbers repeat a chorus or verse.</span>
+              <input className={inputStyle} value={draft.rehearsalOrder} onChange={event => edit('rehearsalOrder', event.target.value)} placeholder="Blank uses sections in the order shown" />
+              <span className="block text-sm text-slate-400">Saved with this song on this device. Uses these section numbers, not imported arrangement metadata. Repeated numbers repeat a chorus or verse.</span>
             </label>
             <button type="button" className={buttonStyle} onClick={previewRehearsal}>Rehearse current draft</button>{' '}
             <button type="button" className={buttonStyle} onClick={() => edit('sections', [...draft.sections, { type: 'verse', label: `Section ${draft.sections.length + 1}`, lyrics: '' }])}>Add section</button>{' '}

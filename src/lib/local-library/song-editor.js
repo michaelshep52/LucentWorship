@@ -1,10 +1,12 @@
+import { parseSectionOrder } from './song-presentation.js';
 /** Preserve imported metadata/arrangement fields while editing known song fields. */
 export function songEditorDraft(record = null) {
   const doc = record?.document ?? { title: '', artist: '', sections: [{ type: 'verse', label: 'Verse 1', lyrics: '' }] };
   if (typeof doc.title !== 'string' || (doc.artist !== undefined && typeof doc.artist !== 'string') || !Array.isArray(doc.sections) || doc.sections.some(section => !section || typeof section !== 'object' || Array.isArray(section) || typeof section.lyrics !== 'string' || (section.label !== undefined && typeof section.label !== 'string'))) {
     throw new Error('This song has an unsupported structure. It is preserved in your library and backup; this editor will not rewrite it.');
   }
-  return { title: doc.title, artist: doc.artist || '', sections: structuredClone(doc.sections) };
+  if (doc.lucent_rehearsal_order !== undefined && typeof doc.lucent_rehearsal_order !== 'string') throw new Error('This song has an unsupported rehearsal order. It is preserved; this editor will not rewrite it.');
+  return { title: doc.title, artist: doc.artist || '', sections: structuredClone(doc.sections), rehearsalOrder: doc.lucent_rehearsal_order || '' };
 }
 export function songDocumentFromDraft(draft, original = {}) {
   if (typeof draft.title !== 'string' || !draft.title.trim()) throw new Error('Give this song a title before saving.');
@@ -12,7 +14,10 @@ export function songDocumentFromDraft(draft, original = {}) {
   for (const section of draft.sections) {
     if (!section || typeof section !== 'object' || typeof section.lyrics !== 'string' || (section.label !== undefined && typeof section.label !== 'string')) throw new Error('Each section needs valid lyrics and a label.');
   }
-  return { ...structuredClone(original), title: draft.title.trim(), artist: draft.artist.trim(), sections: structuredClone(draft.sections) };
+  const order = draft.rehearsalOrder ?? '';
+  if (typeof order !== 'string') throw new Error('Use comma-separated section numbers for the rehearsal order.');
+  parseSectionOrder(order, draft.sections.length);
+  return { ...structuredClone(original), lucent_rehearsal_order: order.trim(), title: draft.title.trim(), artist: draft.artist.trim(), sections: structuredClone(draft.sections) };
 }
 
 /** Copy is explicit: retain content/metadata, but never reuse the original ID. */
