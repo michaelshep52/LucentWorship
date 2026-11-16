@@ -47,3 +47,14 @@ export function jumpRehearsalSlide(state, index, count) {
   if (!Number.isInteger(count) || count < 1 || !Number.isInteger(index) || index < 0 || index >= count) throw new Error('That rehearsal slide is no longer available.');
   return { index, blank: Boolean(state.blank) };
 }
+
+/** Read-only operator cues, separate from the audience payload and blanking state. */
+export function rehearsalCues(slides, index) {
+  if (!Array.isArray(slides) || !Number.isInteger(index) || index < 0 || index >= slides.length) return { current: null, next: null };
+  const cue = position => {
+    const slide = slides[position];
+    if (!slide || typeof slide.content !== 'string') return null;
+    return { number: position + 1, label: typeof slide.section_label === 'string' ? slide.section_label : 'Lyric page', content: slide.content };
+  };
+  return { current: cue(index), next: cue(index + 1) };
+}

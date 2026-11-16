@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState, useRef, useLayoutEffect } from 'react';
 import { audienceMessage, isAudienceControl, requestAudienceWindow } from '../lib/audience-protocol';
 import { getLiveCommand } from '../lib/live-controls';
-import { rehearsalTransition, jumpRehearsalSlide } from '../lib/local-library/song-presentation';
+import { rehearsalTransition, jumpRehearsalSlide, rehearsalCues } from '../lib/local-library/song-presentation';
 
 export default function LocalRehearsal({ rehearsal, onClose }) {
   const slideRef = useRef(null);
@@ -31,6 +31,7 @@ export default function LocalRehearsal({ rehearsal, onClose }) {
     slideRef.current?.focus();
   }
   const slide = rehearsal.slides[state.index];
+  const cues = rehearsalCues(rehearsal.slides, state.index);
   useLayoutEffect(() => { snapshotRef.current = { content: slide?.content || '', blank: state.blank || !slide }; }, [slide, state.blank]);
   useEffect(() => {
     if (typeof BroadcastChannel === 'undefined') { setAudienceStatus('This browser does not support a separate audience channel.'); return; }
@@ -75,6 +76,18 @@ export default function LocalRehearsal({ rehearsal, onClose }) {
     </div>
     <p role="status" className="text-center text-amber-200">{audienceStatus} Move the audience window to the projector. This preview is not hardware-verified; stale updates are designed to blank output at a 10-second threshold (browser timers can be delayed).</p>
     <p role="status" className="text-center text-slate-300">{state.index + 1} / {rehearsal.slides.length} • {slide?.section_label}{state.blank ? ' • blanked' : ''}</p>
+    <section aria-label="Operator-only lyric cues" className="grid gap-3 md:grid-cols-2">
+      <div className="rounded border border-slate-700 p-4">
+        <h2 className="font-semibold">Selected cue • operator only{state.blank ? ' • audience blanked' : ''}</h2>
+        <p className="text-sm text-slate-400">{cues.current ? `${cues.current.number}. ${cues.current.label}` : 'No cue available'}</p>
+        <p className="whitespace-pre-wrap mt-2">{cues.current?.content || ''}</p>
+      </div>
+      <div className="rounded border border-slate-700 p-4">
+        <h2 className="font-semibold">Up next • operator only</h2>
+        <p className="text-sm text-slate-400">{cues.next ? `${cues.next.number}. ${cues.next.label}` : 'End of rehearsal'}</p>
+        <p className="whitespace-pre-wrap mt-2">{cues.next?.content || ''}</p>
+      </div>
+    </section>
     <label className="flex justify-center items-center gap-3 flex-wrap">
       <span>Jump to lyric page</span>
       <select aria-label="Jump to lyric page" value={state.index} onChange={jumpToSlide} className="max-w-full rounded border border-slate-600 bg-slate-900 px-3 py-2">
