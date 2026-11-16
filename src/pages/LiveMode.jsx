@@ -58,7 +58,7 @@ export default function LiveMode() {
       if (next < 0 || next >= slides.length) return i;
       return next;
     });
-    setIsBlack(false);
+    // Cue navigation must not reveal output that the operator deliberately blanked.
   }, [slides.length]);
 
   useEffect(() => {
@@ -182,6 +182,8 @@ export default function LiveMode() {
         <p role="status" className="px-5 py-2 text-sm text-muted-foreground">Loading presentation data…</p>
       )}
 
+      {isBlack && <p role="status" className="px-5 py-2 text-sm text-amber-300">Output blanked. Selecting or advancing slides only cues them; use Unblank or Escape to show the selected slide.</p>}
+
       {/* Main Body */}
       {presenterView ? (
         // PRESENTER VIEW: all slides grid + current slide preview
@@ -189,6 +191,7 @@ export default function LiveMode() {
           {/* Current slide large preview */}
           <div className="flex-1 flex flex-col bg-black">
             <div className="flex-1 flex items-center justify-center relative p-4">
+              {isBlack && <div aria-hidden="true" className="absolute inset-0 z-20 bg-black pointer-events-none" />}
               <AnimatePresence mode="wait">
                 {isBlack ? (
                   <motion.div key="black" className="absolute inset-0 bg-black"
@@ -226,7 +229,7 @@ export default function LiveMode() {
             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-3 py-2 sticky top-0 bg-card border-b border-border">All Slides ({slides.length})</p>
             <div className="p-2 space-y-1.5">
               {slides.map((slide, i) => (
-                <div key={slide.id || i} onClick={() => { setCurrentIndex(i); setIsBlack(false); }}
+                <div key={slide.id || i} onClick={() => { setCurrentIndex(i); }}
                   className={`cursor-pointer rounded-lg overflow-hidden border-2 transition-all ${currentIndex === i ? "border-primary" : "border-transparent hover:border-primary/30"}`}>
                   <div className="aspect-video">
                     <SlidePreview slide={slide} small />
@@ -245,7 +248,7 @@ export default function LiveMode() {
           {presentation && (
             <div className="w-44 border-r border-border overflow-auto bg-card py-2 px-2 space-y-1.5">
               {slides.map((slide, i) => (
-                <div key={slide.id || i} onClick={() => { setCurrentIndex(i); setIsBlack(false); }}
+                <div key={slide.id || i} onClick={() => { setCurrentIndex(i); }}
                   className={`cursor-pointer rounded-md overflow-hidden border-2 transition-all ${currentIndex === i ? "border-primary" : "border-transparent hover:border-primary/30"}`}>
                   <div className="aspect-video"><SlidePreview slide={slide} small /></div>
                   <p className="text-xs text-center text-muted-foreground py-0.5">{i + 1}</p>
@@ -255,6 +258,7 @@ export default function LiveMode() {
           )}
           <div className="flex-1 flex flex-col">
             <div className="flex-1 bg-black flex items-center justify-center relative">
+              {isBlack && <div aria-hidden="true" className="absolute inset-0 z-20 bg-black pointer-events-none" />}
               <AnimatePresence mode="wait">
                 {isBlack ? (
                   <motion.div key="black" className="absolute inset-0 bg-black"
@@ -286,7 +290,7 @@ export default function LiveMode() {
                 {slides.slice(Math.max(0, currentIndex - 4), currentIndex + 8).map((_, i) => {
                   const idx = Math.max(0, currentIndex - 4) + i;
                   return (
-                    <button key={idx} onClick={() => { setCurrentIndex(idx); setIsBlack(false); }}
+                    <button key={idx} onClick={() => { setCurrentIndex(idx); }}
                       className={`h-1.5 rounded-full transition-all duration-200 ${idx === currentIndex ? "w-6 bg-primary" : "w-1.5 bg-border hover:bg-muted-foreground"}`} />
                   );
                 })}
